@@ -43,16 +43,9 @@ const INITIAL_INVENTORY = [
   { id: 'SV-3D', name: '3D Printing', category: 'Services', total: 1, available: 0, pending: 0, borrowed: 0, isLocked: true }
 ];
 
-// Helper: Get minimum borrow date (2 days from today)
-const getMinBorrowDate = () => {
-  const date = new Date();
-  date.setDate(date.getDate() + 2);
-  return date.toISOString().split('T')[0];
-};
-
 export default function App() {
   const [currentView, setCurrentView] = useState('student');
-  const [isLockedToStudent, setIsLockedToStudent] = useState(false); 
+  const [isLockedToStudent, setIsLockedToStudent] = useState(false); // URL Lock state
   const [inventory, setInventory] = useState(INITIAL_INVENTORY);
   const [requests, setRequests] = useState([]);
   
@@ -65,16 +58,16 @@ export default function App() {
   const [isSDModalOpen, setIsSDModalOpen] = useState(false);
   const [sdCounts, setSdCounts] = useState({ 'TL-SD-PH': 0, 'TL-SD-FL': 0, 'TL-SD-TX': 0, 'TL-SD-HX': 0 });
   
-  // Added borrowDate to the student form state
-  const [studentForm, setStudentForm] = useState({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '', borrowDate: '' });
+  const [studentForm, setStudentForm] = useState({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '' });
 
   // --- Check URL for QR Code Lock ---
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('mode') === 'student') {
       setCurrentView('student');
-      setIsLockedToStudent(true); 
+      setIsLockedToStudent(true); // Locks the view to student
     } else {
+      // Default view if accessed normally by admin
       setCurrentView('admin');
       setIsLockedToStudent(false);
     }
@@ -147,7 +140,6 @@ export default function App() {
       email: studentForm.email,
       gradeLevel: studentForm.gradeLevel,
       gradeSection: studentForm.gradeSection,
-      borrowDate: studentForm.borrowDate, // Appending the target date to the request
       items: cart.map(c => ({ itemId: c.id, itemName: c.name, quantity: c.quantity })),
       purpose: studentForm.purpose,
       timestamp: new Date().toISOString(),
@@ -163,8 +155,7 @@ export default function App() {
     setInventory(updatedInventory);
     setCart([]);
     setShowSuccessScreen(true);
-    // Reset form including the new date field
-    setStudentForm({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '', borrowDate: '' });
+    setStudentForm({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '' });
   };
 
   const handleApproveRequest = async (reqId) => {
@@ -208,6 +199,7 @@ export default function App() {
   const filteredInventory = inventory.filter(item => item.category === activeTab && !item.hidden);
 
   return (
+    // UPGRADED BACKGROUND UI HERE
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200 text-slate-800 font-sans selection:bg-indigo-500/20">
       
       {/* Screwdriver Modal Overlay */}
@@ -250,6 +242,7 @@ export default function App() {
           </div>
         </div>
         
+        {/* IMPROVED STUDENT LOCK LOGIC: Shows a badge instead of just vanishing */}
         {!isLockedToStudent ? (
           <div className="flex bg-slate-100 border border-slate-200 p-1 rounded-xl">
             <button onClick={() => setCurrentView('admin')} className={`px-5 py-1.5 rounded-lg text-xs font-bold transition-all ${currentView === 'admin' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>Admin</button>
@@ -272,31 +265,22 @@ export default function App() {
                 <thead>
                   <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
                     <th className="px-5 py-4 font-bold">Student</th>
-                    {/* NEW COLUMN: Date Needed */}
-                    <th className="px-5 py-4 font-bold">Date Needed</th>
                     <th className="px-5 py-4 font-bold">Items</th>
                     <th className="px-5 py-4 text-right font-bold">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {requests.filter(r => r.status === 'Pending').length === 0 ? (
-                    <tr><td colSpan="4" className="p-8 text-center text-slate-400">No pending requests.</td></tr>
+                    <tr><td colSpan="3" className="p-8 text-center text-slate-400">No pending requests.</td></tr>
                   ) : requests.filter(r => r.status === 'Pending').map(req => (
                     <tr key={req.id}>
                       <td className="px-5 py-4">
                         <span className="block font-bold text-slate-900">{req.studentName}</span>
                         <span className="block text-slate-500 text-xs font-mono">{req.gradeLevel} - {req.gradeSection}</span>
                       </td>
-                      {/* NEW DATA CELL: Displaying the required borrow date */}
-                      <td className="px-5 py-4">
-                        <span className="block font-bold text-indigo-700">
-                          {new Date(req.borrowDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-                        </span>
-                        <span className="block text-slate-500 text-[10px] uppercase font-bold tracking-wider">Target Date</span>
-                      </td>
                       <td className="px-5 py-4">
                         {req.items.map((item, idx) => (
-                          <div key={idx} className="text-xs font-medium text-slate-700">
+                          <div key={idx} className="text-xs font-medium text-indigo-900">
                             {item.itemName} <span className="text-indigo-600 font-bold">x{item.quantity}</span>
                           </div>
                         ))}
@@ -414,12 +398,6 @@ export default function App() {
                     <option value="">Section</option>
                     {studentForm.gradeLevel && GRADE_SECTIONS[studentForm.gradeLevel].map(sec => <option key={sec} value={sec}>{sec}</option>)}
                   </select>
-                </div>
-
-                {/* NEW DATE INPUT FOR 2-DAY LEAD TIME */}
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-bold text-slate-500 ml-1 tracking-wider">Date Needed (Min 2 Days Lead)</label>
-                  <input required type="date" min={getMinBorrowDate()} value={studentForm.borrowDate} onChange={(e) => setStudentForm({...studentForm, borrowDate: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400" />
                 </div>
                 
                 <textarea required rows="2" placeholder="Purpose" value={studentForm.purpose} onChange={(e) => setStudentForm({...studentForm, purpose: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"></textarea>
