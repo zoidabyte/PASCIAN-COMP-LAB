@@ -43,9 +43,16 @@ const INITIAL_INVENTORY = [
   { id: 'SV-3D', name: '3D Printing', category: 'Services', total: 1, available: 0, pending: 0, borrowed: 0, isLocked: true }
 ];
 
+// Helper: Get minimum borrow date (2 days from today)
+const getMinBorrowDate = () => {
+  const date = new Date();
+  date.setDate(date.getDate() + 2);
+  return date.toISOString().split('T')[0];
+};
+
 export default function App() {
   const [currentView, setCurrentView] = useState('student');
-  const [isLockedToStudent, setIsLockedToStudent] = useState(false); // URL Lock state
+  const [isLockedToStudent, setIsLockedToStudent] = useState(false); 
   const [inventory, setInventory] = useState(INITIAL_INVENTORY);
   const [requests, setRequests] = useState([]);
   
@@ -58,16 +65,16 @@ export default function App() {
   const [isSDModalOpen, setIsSDModalOpen] = useState(false);
   const [sdCounts, setSdCounts] = useState({ 'TL-SD-PH': 0, 'TL-SD-FL': 0, 'TL-SD-TX': 0, 'TL-SD-HX': 0 });
   
-  const [studentForm, setStudentForm] = useState({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '' });
+  // Added borrowDate to the student form state
+  const [studentForm, setStudentForm] = useState({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '', borrowDate: '' });
 
   // --- Check URL for QR Code Lock ---
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('mode') === 'student') {
       setCurrentView('student');
-      setIsLockedToStudent(true); // Hides the switcher toggle entirely
+      setIsLockedToStudent(true); 
     } else {
-      // Default view if accessed normally by admin
       setCurrentView('admin');
       setIsLockedToStudent(false);
     }
@@ -140,6 +147,7 @@ export default function App() {
       email: studentForm.email,
       gradeLevel: studentForm.gradeLevel,
       gradeSection: studentForm.gradeSection,
+      borrowDate: studentForm.borrowDate, // Appending the target date to the request
       items: cart.map(c => ({ itemId: c.id, itemName: c.name, quantity: c.quantity })),
       purpose: studentForm.purpose,
       timestamp: new Date().toISOString(),
@@ -155,7 +163,8 @@ export default function App() {
     setInventory(updatedInventory);
     setCart([]);
     setShowSuccessScreen(true);
-    setStudentForm({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '' });
+    // Reset form including the new date field
+    setStudentForm({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '', borrowDate: '' });
   };
 
   const handleApproveRequest = async (reqId) => {
@@ -199,7 +208,7 @@ export default function App() {
   const filteredInventory = inventory.filter(item => item.category === activeTab && !item.hidden);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-indigo-500/20">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200 text-slate-800 font-sans selection:bg-indigo-500/20">
       
       {/* Screwdriver Modal Overlay */}
       {isSDModalOpen && (
@@ -241,12 +250,15 @@ export default function App() {
           </div>
         </div>
         
-        {/* HIDE THIS SWITCHER IF LINK CONTAINS ?mode=student */}
-        {!isLockedToStudent && (
+        {!isLockedToStudent ? (
           <div className="flex bg-slate-100 border border-slate-200 p-1 rounded-xl">
             <button onClick={() => setCurrentView('admin')} className={`px-5 py-1.5 rounded-lg text-xs font-bold transition-all ${currentView === 'admin' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>Admin</button>
             <button onClick={() => setCurrentView('student')} className={`px-5 py-1.5 rounded-lg text-xs font-bold transition-all ${currentView === 'student' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>Student</button>
           </div>
+        ) : (
+          <span className="bg-indigo-100 text-indigo-800 px-4 py-1.5 rounded-xl text-xs font-black tracking-wide uppercase shadow-sm border border-indigo-200">
+            Student Portal
+          </span>
         )}
       </header>
 
@@ -260,22 +272,31 @@ export default function App() {
                 <thead>
                   <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
                     <th className="px-5 py-4 font-bold">Student</th>
+                    {/* NEW COLUMN: Date Needed */}
+                    <th className="px-5 py-4 font-bold">Date Needed</th>
                     <th className="px-5 py-4 font-bold">Items</th>
                     <th className="px-5 py-4 text-right font-bold">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {requests.filter(r => r.status === 'Pending').length === 0 ? (
-                    <tr><td colSpan="3" className="p-8 text-center text-slate-400">No pending requests.</td></tr>
+                    <tr><td colSpan="4" className="p-8 text-center text-slate-400">No pending requests.</td></tr>
                   ) : requests.filter(r => r.status === 'Pending').map(req => (
                     <tr key={req.id}>
                       <td className="px-5 py-4">
                         <span className="block font-bold text-slate-900">{req.studentName}</span>
                         <span className="block text-slate-500 text-xs font-mono">{req.gradeLevel} - {req.gradeSection}</span>
                       </td>
+                      {/* NEW DATA CELL: Displaying the required borrow date */}
+                      <td className="px-5 py-4">
+                        <span className="block font-bold text-indigo-700">
+                          {new Date(req.borrowDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                        </span>
+                        <span className="block text-slate-500 text-[10px] uppercase font-bold tracking-wider">Target Date</span>
+                      </td>
                       <td className="px-5 py-4">
                         {req.items.map((item, idx) => (
-                          <div key={idx} className="text-xs font-medium text-indigo-900">
+                          <div key={idx} className="text-xs font-medium text-slate-700">
                             {item.itemName} <span className="text-indigo-600 font-bold">x{item.quantity}</span>
                           </div>
                         ))}
@@ -337,9 +358,9 @@ export default function App() {
             </div>
           )}
 
-          <div className="flex space-x-2 bg-slate-200/60 p-1 rounded-xl w-fit">
+          <div className="flex space-x-2 bg-slate-200/60 p-1 rounded-xl w-fit shadow-inner">
             {['Equipment', 'Tools', 'Accessories', 'Services'].map((tab) => (
-              <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{tab}</button>
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>{tab}</button>
             ))}
           </div>
 
@@ -348,7 +369,7 @@ export default function App() {
               {filteredInventory.map((item) => {
                 const isAvailable = item.category === 'Services' ? !item.isLocked : item.available > 0;
                 return (
-                  <div key={item.id} onClick={() => !item.isLocked && isAvailable && handleAddToCart(item)} className={`bg-white border p-5 rounded-2xl shadow-sm transition-all ${item.isLocked ? 'opacity-60 bg-slate-50' : isAvailable ? 'cursor-pointer hover:border-indigo-400' : 'opacity-50'}`}>
+                  <div key={item.id} onClick={() => !item.isLocked && isAvailable && handleAddToCart(item)} className={`bg-white border p-5 rounded-2xl shadow-sm transition-all ${item.isLocked ? 'opacity-60 bg-slate-50' : isAvailable ? 'cursor-pointer hover:border-indigo-400 hover:shadow-md' : 'opacity-50'}`}>
                     <div className="flex justify-between">
                       <span className="text-[11px] font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{item.id}</span>
                       <span className={`text-[11px] px-2 py-0.5 rounded font-bold ${isAvailable ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
@@ -363,7 +384,7 @@ export default function App() {
             </div>
 
             <div className="lg:col-span-1">
-              <form onSubmit={handleBorrowSubmit} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+              <form onSubmit={handleBorrowSubmit} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4 sticky top-24">
                 <h3 className="font-black text-slate-900 text-lg border-b border-slate-100 pb-3">Your Cart</h3>
                 
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
@@ -372,31 +393,37 @@ export default function App() {
                     <div key={cartItem.id} className="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                       <span className="text-sm font-bold truncate pr-2">{cartItem.name}</span>
                       <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => handleUpdateCartQuantity(cartItem.id, -1)} className="px-2 py-1 bg-white border rounded text-xs font-bold">-</button>
+                        <button type="button" onClick={() => handleUpdateCartQuantity(cartItem.id, -1)} className="px-2 py-1 bg-white border rounded text-xs font-bold hover:bg-slate-100">-</button>
                         <span className="text-xs font-mono font-bold w-4 text-center">{cartItem.quantity}</span>
-                        <button type="button" onClick={() => handleUpdateCartQuantity(cartItem.id, 1)} className="px-2 py-1 bg-white border rounded text-xs font-bold">+</button>
+                        <button type="button" onClick={() => handleUpdateCartQuantity(cartItem.id, 1)} className="px-2 py-1 bg-white border rounded text-xs font-bold hover:bg-slate-100">+</button>
                         <button type="button" onClick={() => handleRemoveFromCart(cartItem.id)} className="text-slate-400 hover:text-red-500 font-bold ml-1">×</button>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <input required type="text" placeholder="Full Name" value={studentForm.name} onChange={(e) => setStudentForm({...studentForm, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm" />
-                <input required type="email" placeholder="Email" value={studentForm.email} onChange={(e) => setStudentForm({...studentForm, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm" />
+                <input required type="text" placeholder="Full Name" value={studentForm.name} onChange={(e) => setStudentForm({...studentForm, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400" />
+                <input required type="email" placeholder="Email" value={studentForm.email} onChange={(e) => setStudentForm({...studentForm, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400" />
                 
                 <div className="grid grid-cols-2 gap-3">
-                  <select required type="text" placeholder="Grade" value={studentForm.gradeLevel} onChange={(e) => setStudentForm({...studentForm, gradeLevel: e.target.value, gradeSection: ''})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm">
+                  <select required type="text" placeholder="Grade" value={studentForm.gradeLevel} onChange={(e) => setStudentForm({...studentForm, gradeLevel: e.target.value, gradeSection: ''})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400">
                     <option value="">Grade</option>
                     {Object.keys(GRADE_SECTIONS).map(grade => <option key={grade} value={grade}>{grade}</option>)}
                   </select>
-                  <select required disabled={!studentForm.gradeLevel} value={studentForm.gradeSection} onChange={(e) => setStudentForm({...studentForm, gradeSection: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm">
+                  <select required disabled={!studentForm.gradeLevel} value={studentForm.gradeSection} onChange={(e) => setStudentForm({...studentForm, gradeSection: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm disabled:opacity-50 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400">
                     <option value="">Section</option>
                     {studentForm.gradeLevel && GRADE_SECTIONS[studentForm.gradeLevel].map(sec => <option key={sec} value={sec}>{sec}</option>)}
                   </select>
                 </div>
+
+                {/* NEW DATE INPUT FOR 2-DAY LEAD TIME */}
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-slate-500 ml-1 tracking-wider">Date Needed (Min 2 Days Lead)</label>
+                  <input required type="date" min={getMinBorrowDate()} value={studentForm.borrowDate} onChange={(e) => setStudentForm({...studentForm, borrowDate: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400" />
+                </div>
                 
-                <textarea required rows="2" placeholder="Purpose" value={studentForm.purpose} onChange={(e) => setStudentForm({...studentForm, purpose: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm"></textarea>
-                <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-xl text-sm font-black shadow-md hover:bg-indigo-700">Submit Request</button>
+                <textarea required rows="2" placeholder="Purpose" value={studentForm.purpose} onChange={(e) => setStudentForm({...studentForm, purpose: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"></textarea>
+                <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-xl text-sm font-black shadow-md hover:bg-indigo-700 transition-colors">Submit Request</button>
               </form>
             </div>
           </div>
