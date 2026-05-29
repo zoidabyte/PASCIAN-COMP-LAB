@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { SpeedInsights } from "@vercel/speed-insights/next"
+
 // --- Firebase Imports ---
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc } from 'firebase/firestore';
@@ -29,7 +31,6 @@ const GRADE_SECTIONS = {
 };
 
 const INITIAL_INVENTORY = [
-  // --- Equipment ---
   { id: 'EQ-LP', name: 'Laptop', category: 'Equipment', total: 46, available: 46, pending: 0, borrowed: 0 },
   { id: 'EQ-TB', name: 'Tablet', category: 'Equipment', total: 160, available: 160, pending: 0, borrowed: 0 },
   { id: 'EQ-MN', name: 'Monitor', category: 'Equipment', total: 25, available: 25, pending: 0, borrowed: 0 },
@@ -37,8 +38,6 @@ const INITIAL_INVENTORY = [
   { id: 'EQ-RB', name: 'Robotics Kit', category: 'Equipment', total: 30, available: 30, pending: 0, borrowed: 0 },
   { id: 'EQ-RT', name: 'Wi-Fi Router', category: 'Equipment', total: 10, available: 10, pending: 0, borrowed: 0 },
   { id: 'EQ-UP', name: 'UPS (Power Backup)', category: 'Equipment', total: 12, available: 12, pending: 0, borrowed: 0 },
-
-  // --- Tools ---
   { id: 'TL-LT', name: 'LAN Tester', category: 'Tools', total: 10, available: 10, pending: 0, borrowed: 0 },
   { id: 'TL-CT', name: 'Crimping Tool', category: 'Tools', total: 15, available: 15, pending: 0, borrowed: 0 },
   { id: 'TL-SD-SET', name: 'Screwdriver Set', category: 'Tools', total: 20, available: 20, pending: 0, borrowed: 0, isScrewdriverTrigger: true },
@@ -47,16 +46,12 @@ const INITIAL_INVENTORY = [
   { id: 'TL-SD-TX', name: 'Torx Screwdriver', category: 'Tools', total: 5, available: 5, pending: 0, borrowed: 0, hidden: true },
   { id: 'TL-SD-HX', name: 'Hex Screwdriver', category: 'Tools', total: 5, available: 5, pending: 0, borrowed: 0, hidden: true },
   { id: 'TL-BB', name: 'Bread Board', category: 'Tools', total: 40, available: 40, pending: 0, borrowed: 0 },
-
-  // --- Accessories ---
   { id: 'AC-KB', name: 'Keyboard', category: 'Accessories', total: 30, available: 30, pending: 0, borrowed: 0 },
   { id: 'AC-MS', name: 'Mouse', category: 'Accessories', total: 35, available: 35, pending: 0, borrowed: 0 },
   { id: 'AC-HS', name: 'Headset', category: 'Accessories', total: 25, available: 25, pending: 0, borrowed: 0 },
   { id: 'AC-VG', name: 'VGA Cable', category: 'Accessories', total: 5, available: 5, pending: 0, borrowed: 0 },
   { id: 'AC-HD', name: 'HDMI Cable', category: 'Accessories', total: 5, available: 5, pending: 0, borrowed: 0 },
   { id: 'AC-EX', name: 'Extension Cord', category: 'Accessories', total: 15, available: 15, pending: 0, borrowed: 0 },
-
-  // --- Services ---
   { id: 'SV-2D', name: '2D Printing', category: 'Services', total: 999, available: 999, pending: 0, borrowed: 0 },
   { id: 'SV-3D', name: '3D Printing', category: 'Services', total: 1, available: 0, pending: 0, borrowed: 0, isLocked: true }
 ];
@@ -70,20 +65,26 @@ const getMinBorrowDate = () => {
 export default function App() {
   const [currentView, setCurrentView] = useState('student');
   const [isLockedToStudent, setIsLockedToStudent] = useState(false); 
+  
+  // --- Security State ---
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const ADMIN_PASSCODE = "1234"; 
+  
+  // --- Admin Dashboard State ---
+  const [adminTab, setAdminTab] = useState('Pending'); // Controls which requests are visible
+
   const [inventory, setInventory] = useState(INITIAL_INVENTORY);
   const [requests, setRequests] = useState([]);
   
-  // Student UI States
   const [activeTab, setActiveTab] = useState('Tools'); 
   const [cart, setCart] = useState([]); 
   const [showSuccessScreen, setShowSuccessScreen] = useState(false);
   
-  // Screwdriver Modal State
   const [isSDModalOpen, setIsSDModalOpen] = useState(false);
   const [sdCounts, setSdCounts] = useState({ 'TL-SD-PH': 0, 'TL-SD-FL': 0, 'TL-SD-TX': 0, 'TL-SD-HX': 0 });
   const [studentForm, setStudentForm] = useState({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '', borrowDate: '' });
 
-  // URL View Control Setup
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('mode') === 'student') {
@@ -95,23 +96,13 @@ export default function App() {
     }
   }, []);
 
-  // --- Real-Time Sync with Firestore Brain ---
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "requests"), (snapshot) => {
-      const fetchedRequests = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
+      const fetchedRequests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       fetchedRequests.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       setRequests(fetchedRequests);
 
-      let updatedInventory = INITIAL_INVENTORY.map(item => ({
-        ...item,
-        pending: 0,
-        borrowed: 0,
-        available: item.total
-      }));
+      let updatedInventory = INITIAL_INVENTORY.map(item => ({ ...item, pending: 0, borrowed: 0, available: item.total }));
 
       fetchedRequests.forEach(req => {
         if (req.status === 'Pending') {
@@ -130,50 +121,46 @@ export default function App() {
             }
           });
         }
+        // If status is 'Returned' or 'Rejected', it intentionally does NOT count toward pending or borrowed, auto-restoring stock!
       });
-
       setInventory(updatedInventory);
     });
-
     return () => unsubscribe();
   }, []);
 
-  // --- Inventory Management Utilities ---
+  const handleAdminLogin = (e) => {
+    e.preventDefault();
+    if (pinInput === ADMIN_PASSCODE) {
+      setIsAdminUnlocked(true);
+      setPinInput(''); 
+    } else {
+      alert("Incorrect PIN. Access Denied.");
+      setPinInput('');
+    }
+  };
+
   const handleAddToCart = (item) => {
     if (item.isScrewdriverTrigger) {
       setIsSDModalOpen(true);
       return;
     }
-    
     const existingCartItem = cart.find(c => c.id === item.id);
     if (existingCartItem) {
-      if (item.category !== 'Services' && existingCartItem.quantity >= item.available) {
-        alert(`Cannot add more. Only ${item.available} units available.`);
-        return;
-      }
+      if (item.category !== 'Services' && existingCartItem.quantity >= item.available) return alert(`Only ${item.available} units available.`);
       setCart(cart.map(c => c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c));
-    } else {
-      setCart([...cart, { id: item.id, name: item.name, quantity: 1, available: item.available, category: item.category }]);
-    }
+    } else setCart([...cart, { id: item.id, name: item.name, quantity: 1, available: item.available, category: item.category }]);
   };
 
   const confirmScrewdriverSelection = () => {
     let updatedCart = [...cart];
-
     Object.entries(sdCounts).forEach(([id, qtyToAdd]) => {
       if (qtyToAdd > 0) {
         const tool = inventory.find(i => i.id === id);
         const existingItemIndex = updatedCart.findIndex(c => c.id === id);
-
-        if (existingItemIndex >= 0) {
-          const newTotalQty = Math.min(tool.available, updatedCart[existingItemIndex].quantity + qtyToAdd);
-          updatedCart[existingItemIndex].quantity = newTotalQty;
-        } else {
-          updatedCart.push({ id, name: tool.name, quantity: qtyToAdd, available: tool.available, category: 'Tools' });
-        }
+        if (existingItemIndex >= 0) updatedCart[existingItemIndex].quantity = Math.min(tool.available, updatedCart[existingItemIndex].quantity + qtyToAdd);
+        else updatedCart.push({ id, name: tool.name, quantity: qtyToAdd, available: tool.available, category: 'Tools' });
       }
     });
-
     setCart(updatedCart);
     setIsSDModalOpen(false);
     setSdCounts({ 'TL-SD-PH': 0, 'TL-SD-FL': 0, 'TL-SD-TX': 0, 'TL-SD-HX': 0 });
@@ -183,10 +170,7 @@ export default function App() {
     setCart(cart.map(c => {
       if (c.id === id) {
         const newQty = c.quantity + amount;
-        if (c.category !== 'Services' && newQty > c.available) {
-          alert(`Max available stock (${c.available}) reached.`);
-          return c;
-        }
+        if (c.category !== 'Services' && newQty > c.available) { alert(`Max available stock reached.`); return c; }
         return newQty > 0 ? { ...c, quantity: newQty } : null;
       }
       return c;
@@ -195,55 +179,34 @@ export default function App() {
 
   const handleRemoveFromCart = (id) => setCart(cart.filter(c => c.id !== id));
 
-  // --- Firestore Write Mutations ---
   const handleBorrowSubmit = async (e) => {
     e.preventDefault();
     if (cart.length === 0) return alert("Your cart is empty.");
-
-    const newRequest = {
-      studentName: studentForm.name,
-      email: studentForm.email,
-      gradeLevel: studentForm.gradeLevel,
-      gradeSection: studentForm.gradeSection,
-      borrowDate: studentForm.borrowDate,
-      items: cart.map(c => ({ itemId: c.id, itemName: c.name, quantity: c.quantity })),
-      purpose: studentForm.purpose,
-      timestamp: new Date().toISOString(),
-      status: 'Pending'
-    };
-
     try {
-      await addDoc(collection(db, "requests"), newRequest);
-      setCart([]);
-      setShowSuccessScreen(true);
+      await addDoc(collection(db, "requests"), {
+        studentName: studentForm.name, email: studentForm.email, gradeLevel: studentForm.gradeLevel, gradeSection: studentForm.gradeSection, borrowDate: studentForm.borrowDate,
+        items: cart.map(c => ({ itemId: c.id, itemName: c.name, quantity: c.quantity })), purpose: studentForm.purpose, timestamp: new Date().toISOString(), status: 'Pending'
+      });
+      setCart([]); setShowSuccessScreen(true);
       setStudentForm({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '', borrowDate: '' });
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err) {
-      console.error(err);
-      alert("Error logging request to database. Please try again.");
-    }
+    } catch (err) { alert("Error logging request to database. Please try again."); }
   };
 
+  // --- Database Action Handlers ---
   const handleApproveRequest = async (reqId) => {
-    const req = requests.find(r => r.id === reqId);
-    if (!req) return;
-    try {
-      await updateDoc(doc(db, "requests", reqId), { status: 'Approved' });
-      alert(`Success approved. Dispatched to ${req.email}`);
-    } catch (err) {
-      alert("Error updating request status.");
-    }
+    try { await updateDoc(doc(db, "requests", reqId), { status: 'Approved' }); } 
+    catch (err) { alert("Error updating request status."); }
   };
 
   const handleRejectRequest = async (reqId) => {
-    const req = requests.find(r => r.id === reqId);
-    if (!req) return;
-    try {
-      await updateDoc(doc(db, "requests", reqId), { status: 'Rejected' });
-      alert(`Declined request for ${req.email}`);
-    } catch (err) {
-      alert("Error updating request status.");
-    }
+    try { await updateDoc(doc(db, "requests", reqId), { status: 'Rejected' }); } 
+    catch (err) { alert("Error updating request status."); }
+  };
+
+  const handleReturnRequest = async (reqId) => {
+    try { await updateDoc(doc(db, "requests", reqId), { status: 'Returned' }); } 
+    catch (err) { alert("Error marking as returned."); }
   };
 
   const filteredInventory = inventory.filter(item => item.category === activeTab && !item.hidden);
@@ -251,7 +214,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans antialiased selection:bg-indigo-500/20">
       
-      {/* Screwdriver Modal Overlay */}
+      {/* Screwdriver Modal */}
       {isSDModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-slate-200">
@@ -279,7 +242,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Top Navigation Bar */}
+      {/* Header */}
       <header className="sticky top-0 z-50 px-4 py-4 flex justify-between items-center bg-white border-b border-slate-200 shadow-md">
         <div className="flex items-center space-x-3">
           <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-400 flex items-center justify-center shadow-md shrink-0">
@@ -305,85 +268,161 @@ export default function App() {
 
       {/* ADMIN CONTROL PANEL */}
       {currentView === 'admin' && (
-        <main className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
-          <section className="space-y-4">
-            <h2 className="text-base font-black text-slate-900 tracking-wide uppercase">Pending Requests</h2>
-            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
-              <table className="w-full text-left text-base whitespace-nowrap">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-                    <th className="px-5 py-4 font-bold">Student</th>
-                    <th className="px-5 py-4 font-bold">Date Needed</th>
-                    <th className="px-5 py-4 font-bold">Items</th>
-                    <th className="px-5 py-4 text-right font-bold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {requests.filter(r => r.status === 'Pending').length === 0 ? (
-                    <tr><td colSpan="4" className="p-8 text-center text-slate-400">No pending requests inside database.</td></tr>
-                  ) : requests.filter(r => r.status === 'Pending').map(req => (
-                    <tr key={req.id}>
-                      <td className="px-5 py-4">
-                        <span className="block font-bold text-slate-900">{req.studentName}</span>
-                        <span className="block text-slate-500 text-sm font-mono">{req.gradeLevel} - {req.gradeSection}</span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className="block font-bold text-indigo-700">
-                          {req.borrowDate ? new Date(req.borrowDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'N/A'}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4">
-                        {req.items?.map((item, idx) => (
-                          <div key={idx} className="text-sm font-medium text-slate-700">
-                            {item.itemName} <span className="text-indigo-600 font-bold">x{item.quantity}</span>
-                          </div>
-                        ))}
-                      </td>
-                      <td className="px-5 py-4 text-right space-x-3">
-                        <button onClick={() => handleRejectRequest(req.id)} className="text-slate-500 hover:text-red-600 font-bold text-sm">Decline</button>
-                        <button onClick={() => handleApproveRequest(req.id)} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-lg text-sm font-black shadow-md">Approve</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <main className="max-w-7xl mx-auto p-4 md:p-8">
+          
+          {/* Security Gate */}
+          {!isAdminUnlocked ? (
+            <div className="max-w-sm mx-auto mt-20 bg-white p-8 rounded-3xl shadow-xl border border-slate-200 text-center">
+              <div className="h-16 w-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl">🔒</div>
+              <h2 className="text-xl font-black text-slate-900 mb-2">Admin Access</h2>
+              <p className="text-sm text-slate-500 mb-6">Enter your security PIN to access the dashboard.</p>
+              
+              <form onSubmit={handleAdminLogin} className="space-y-4">
+                <input 
+                  type="password" 
+                  value={pinInput} 
+                  onChange={(e) => setPinInput(e.target.value)} 
+                  placeholder="Enter PIN" 
+                  className="w-full text-center tracking-widest text-2xl font-mono bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 focus:outline-none focus:border-indigo-500 focus:bg-white"
+                  autoFocus
+                />
+                <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-xl font-black shadow-md hover:bg-indigo-700 active:scale-95 transition-all">Unlock</button>
+              </form>
             </div>
-          </section>
+          ) : (
+            
+            /* Admin Dashboard */
+            <div className="space-y-8 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex justify-between items-end">
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight">System Dashboard</h2>
+                <button onClick={() => setIsAdminUnlocked(false)} className="text-sm font-bold text-slate-500 hover:text-slate-800">Lock Terminal 🔒</button>
+              </div>
 
-          <section className="space-y-4">
-            <h2 className="text-base font-black text-slate-900 tracking-wide uppercase">Full Inventory</h2>
-            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
-              <table className="w-full text-left text-base whitespace-nowrap">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
-                    <th className="p-5 font-bold">Item</th>
-                    <th className="p-5 text-center font-bold">Total</th>
-                    <th className="p-5 text-center font-bold text-emerald-600">Available</th>
-                    <th className="p-5 text-center font-bold text-orange-500">Pending</th>
-                    <th className="p-5 text-center font-bold text-violet-600">Borrowed</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {inventory.filter(i => !i.hidden && !i.isScrewdriverTrigger).map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/50">
-                      <td className="p-5 font-bold text-slate-800 flex items-center gap-3">
-                        <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-1 rounded">{item.id}</span>
-                        {item.name}
-                      </td>
-                      <td className="p-5 text-center font-mono">{item.category === 'Services' ? '-' : item.total}</td>
-                      <td className="p-5 text-center font-mono font-black text-emerald-600">{item.category === 'Services' ? '-' : item.available}</td>
-                      <td className="p-5 text-center font-mono font-bold text-orange-500">{item.pending}</td>
-                      <td className="p-5 text-center font-mono font-bold text-violet-600">{item.borrowed}</td>
-                    </tr>
+              <section className="space-y-4">
+                
+                {/* Tracker Tabs */}
+                <div className="flex bg-slate-200/80 p-1 rounded-xl w-full sm:w-fit shadow-inner">
+                  {['Pending', 'Approved', 'History'].map((tab) => (
+                    <button 
+                      key={tab} 
+                      onClick={() => setAdminTab(tab)} 
+                      className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all flex-1 text-center sm:flex-none ${adminTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                    >
+                      {tab === 'Approved' ? 'Active Borrows' : tab}
+                      <span className="ml-2 bg-slate-100 text-slate-500 text-xs px-2 py-0.5 rounded-full">
+                        {requests.filter(r => tab === 'History' ? (r.status === 'Returned' || r.status === 'Rejected') : r.status === tab).length}
+                      </span>
+                    </button>
                   ))}
-                </tbody>
-              </table>
+                </div>
+
+                {/* Filtered Request Table */}
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
+                  <table className="w-full text-left text-base whitespace-nowrap">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+                        <th className="px-5 py-4 font-bold">Student</th>
+                        <th className="px-5 py-4 font-bold">Date Needed</th>
+                        <th className="px-5 py-4 font-bold">Items</th>
+                        <th className="px-5 py-4 text-right font-bold">Actions / Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      
+                      {/* Determine which requests to show based on the active tab */}
+                      {(() => {
+                        const visibleRequests = requests.filter(r => adminTab === 'History' ? (r.status === 'Returned' || r.status === 'Rejected') : r.status === adminTab);
+                        
+                        if (visibleRequests.length === 0) {
+                          return <tr><td colSpan="4" className="p-8 text-center text-slate-400">No {adminTab.toLowerCase()} requests right now.</td></tr>;
+                        }
+
+                        return visibleRequests.map(req => (
+                          <tr key={req.id}>
+                            <td className="px-5 py-4">
+                              <span className="block font-bold text-slate-900">{req.studentName}</span>
+                              <span className="block text-slate-500 text-sm font-mono">{req.gradeLevel} - {req.gradeSection}</span>
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className="block font-bold text-indigo-700">
+                                {req.borrowDate ? new Date(req.borrowDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'N/A'}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4">
+                              {req.items?.map((item, idx) => (
+                                <div key={idx} className="text-sm font-medium text-slate-700">
+                                  {item.itemName} <span className="text-indigo-600 font-bold">x{item.quantity}</span>
+                                </div>
+                              ))}
+                            </td>
+                            <td className="px-5 py-4 text-right">
+                              
+                              {/* Dynamic Buttons based on status */}
+                              {req.status === 'Pending' && (
+                                <div className="space-x-3">
+                                  <button onClick={() => handleRejectRequest(req.id)} className="text-slate-500 hover:text-red-600 font-bold text-sm">Decline</button>
+                                  <button onClick={() => handleApproveRequest(req.id)} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-lg text-sm font-black shadow-md">Approve</button>
+                                </div>
+                              )}
+
+                              {req.status === 'Approved' && (
+                                <button onClick={() => handleReturnRequest(req.id)} className="bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200 px-4 py-2 rounded-lg text-sm font-black shadow-sm transition-colors">
+                                  Mark as Returned
+                                </button>
+                              )}
+
+                              {(req.status === 'Returned' || req.status === 'Rejected') && (
+                                <span className={`px-3 py-1 rounded-full text-xs font-black tracking-wide ${req.status === 'Returned' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                                  {req.status}
+                                </span>
+                              )}
+
+                            </td>
+                          </tr>
+                        ));
+                      })()}
+                      
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="text-base font-black text-slate-900 tracking-wide uppercase">Live Inventory Tracker</h3>
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
+                  <table className="w-full text-left text-base whitespace-nowrap">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
+                        <th className="p-5 font-bold">Item</th>
+                        <th className="p-5 text-center font-bold">Total Stock</th>
+                        <th className="p-5 text-center font-bold text-emerald-600">Available</th>
+                        <th className="p-5 text-center font-bold text-orange-500">Pending</th>
+                        <th className="p-5 text-center font-bold text-violet-600">Borrowed Out</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {inventory.filter(i => !i.hidden && !i.isScrewdriverTrigger).map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-50/50">
+                          <td className="p-5 font-bold text-slate-800 flex items-center gap-3">
+                            <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-1 rounded">{item.id}</span>
+                            {item.name}
+                          </td>
+                          <td className="p-5 text-center font-mono">{item.category === 'Services' ? '-' : item.total}</td>
+                          <td className="p-5 text-center font-mono font-black text-emerald-600">{item.category === 'Services' ? '-' : item.available}</td>
+                          <td className="p-5 text-center font-mono font-bold text-orange-500">{item.pending}</td>
+                          <td className="p-5 text-center font-mono font-bold text-violet-600">{item.borrowed}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
             </div>
-          </section>
+          )}
         </main>
       )}
 
-      {/* STUDENT SUBMISSION SCREEN */}
+      {/* STUDENT SUBMISSION SCREEN (Kept exactly the same) */}
       {currentView === 'student' && (
         <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
           {showSuccessScreen && (
@@ -399,7 +438,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Large Tap Categories */}
           <div className="flex bg-slate-200/80 p-1.5 rounded-2xl w-full shadow-inner overflow-x-auto gap-1">
             {['Equipment', 'Tools', 'Accessories', 'Services'].map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap flex-1 text-center active:scale-95 ${activeTab === tab ? 'bg-white text-indigo-600 font-black shadow-md' : 'text-slate-600 hover:text-slate-900'}`}>{tab}</button>
@@ -407,8 +445,6 @@ export default function App() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-            
-            {/* Catalog Grid */}
             <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
               {filteredInventory.map((item) => {
                 const isAvailable = item.category === 'Services' ? !item.isLocked : item.available > 0;
@@ -423,7 +459,6 @@ export default function App() {
                       </div>
                       <h3 className="font-black mt-3 text-lg text-slate-800 tracking-tight leading-tight">{item.name}</h3>
                     </div>
-                    
                     {isAvailable && (
                       <div className="mt-4 pt-3 border-t border-slate-50 flex justify-between items-center">
                         <span className="text-xs text-slate-400 font-semibold">{item.isScrewdriverTrigger ? 'Tap to setup selection' : 'Tap to add to your bag'}</span>
@@ -435,7 +470,6 @@ export default function App() {
               })}
             </div>
 
-            {/* Mobile Form & Cart Container */}
             <div className="lg:col-span-1">
               <form onSubmit={handleBorrowSubmit} className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-xl space-y-5 lg:sticky lg:top-24">
                 <h3 className="font-black text-slate-900 text-xl border-b border-slate-100 pb-3 flex items-center justify-between">
@@ -443,7 +477,6 @@ export default function App() {
                   <span className="bg-indigo-600 text-white font-mono text-xs px-2.5 py-1 rounded-full">{cart.reduce((sum, i) => sum + i.quantity, 0)} Items</span>
                 </h3>
                 
-                {/* Cart Row Display */}
                 <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                   {cart.length === 0 ? <p className="text-base text-slate-400 text-center py-8 font-medium">No items inside your cart yet. Tap anything from the catalog above to add.</p> : 
                     cart.map((cartItem) => (
@@ -459,15 +492,12 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Form Input Section - Scaled Up for Tapping / Stopping Auto-Zoom */}
                 <div className="space-y-4 pt-2 border-t border-slate-100">
                   <div>
                     <label className="text-xs uppercase font-black text-slate-400 ml-1 tracking-wide">Borrower Info</label>
                     <input required type="text" placeholder="Full Name" value={studentForm.name} onChange={(e) => setStudentForm({...studentForm, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 mt-1 text-base shadow-inner focus:outline-none focus:border-indigo-500 focus:bg-white" />
                   </div>
-                  
                   <input required type="email" placeholder="School Email Address" value={studentForm.email} onChange={(e) => setStudentForm({...studentForm, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-base shadow-inner focus:outline-none focus:border-indigo-500 focus:bg-white" />
-                  
                   <div className="grid grid-cols-2 gap-3">
                     <select required value={studentForm.gradeLevel} onChange={(e) => setStudentForm({...studentForm, gradeLevel: e.target.value, gradeSection: ''})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3.5 text-base shadow-sm focus:outline-none focus:border-indigo-500 focus:bg-white">
                       <option value="">Grade</option>
@@ -478,17 +508,14 @@ export default function App() {
                       {studentForm.gradeLevel && GRADE_SECTIONS[studentForm.gradeLevel].map(sec => <option key={sec} value={sec}>{sec}</option>)}
                     </select>
                   </div>
-
                   <div className="space-y-1">
                     <label className="text-xs uppercase font-black text-slate-400 ml-1 tracking-wide">Target Collection Date</label>
                     <input required type="date" min={getMinBorrowDate()} value={studentForm.borrowDate} onChange={(e) => setStudentForm({...studentForm, borrowDate: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-base shadow-inner focus:outline-none focus:border-indigo-500 focus:bg-white" />
                   </div>
-                  
                   <div>
                     <label className="text-xs uppercase font-black text-slate-400 ml-1 tracking-wide">Activity Purpose</label>
-                    <textarea required rows="2" placeholder="e.g., Robotics competition project development, research experimentation..." value={studentForm.purpose} onChange={(e) => setStudentForm({...studentForm, purpose: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 mt-1 text-base shadow-inner focus:outline-none focus:border-indigo-500 focus:bg-white"></textarea>
+                    <textarea required rows="2" placeholder="e.g., Robotics competition project..." value={studentForm.purpose} onChange={(e) => setStudentForm({...studentForm, purpose: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 mt-1 text-base shadow-inner focus:outline-none focus:border-indigo-500 focus:bg-white"></textarea>
                   </div>
-                  
                   <button type="submit" className="w-full bg-indigo-600 text-white py-4 mt-2 rounded-xl text-base font-black tracking-wide shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-[0.98] transition-transform">Submit Request</button>
                 </div>
               </form>
