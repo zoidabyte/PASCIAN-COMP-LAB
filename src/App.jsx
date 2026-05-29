@@ -44,6 +44,7 @@ const INITIAL_INVENTORY = [
   { id: 'TL-SD-TX', name: 'Torx Screwdriver', category: 'Tools', total: 5, available: 5, pending: 0, borrowed: 0, hidden: true },
   { id: 'TL-SD-HX', name: 'Hex Screwdriver', category: 'Tools', total: 5, available: 5, pending: 0, borrowed: 0, hidden: true },
   { id: 'TL-BB', name: 'Bread Board', category: 'Tools', total: 40, available: 40, pending: 0, borrowed: 0 },
+  { id: 'TL-SI', name: 'Soldering Iron', category: 'Tools', total: 10, available: 10, pending: 0, borrowed: 0 },
   { id: 'AC-KB', name: 'Keyboard', category: 'Accessories', total: 30, available: 30, pending: 0, borrowed: 0 },
   { id: 'AC-MS', name: 'Mouse', category: 'Accessories', total: 35, available: 35, pending: 0, borrowed: 0 },
   { id: 'AC-HS', name: 'Headset', category: 'Accessories', total: 25, available: 25, pending: 0, borrowed: 0 },
@@ -70,7 +71,7 @@ export default function App() {
   const ADMIN_PASSCODE = "1234";
 
   // --- Admin Dashboard State ---
-  const [adminTab, setAdminTab] = useState('Pending'); // Controls which requests are visible
+  const [adminTab, setAdminTab] = useState('Pending'); 
 
   const [inventory, setInventory] = useState(INITIAL_INVENTORY);
   const [requests, setRequests] = useState([]);
@@ -120,12 +121,30 @@ export default function App() {
             }
           });
         }
-        // If status is 'Returned' or 'Rejected', it intentionally does NOT count toward pending or borrowed, auto-restoring stock!
       });
       setInventory(updatedInventory);
     });
     return () => unsubscribe();
   }, []);
+
+  // --- Resend Cloud Email Backend Trigger ---
+  const triggerEmailNotification = async (reqData, newStatus) => {
+    try {
+      await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: reqData.email,
+          subject: `Equipment Request Update: ${newStatus}`,
+          studentName: reqData.studentName,
+          status: newStatus,
+          items: reqData.items
+        })
+      });
+    } catch (err) {
+      console.error("Failed to send email configuration callback:", err);
+    }
+  };
 
   const handleAdminLogin = (e) => {
     e.preventDefault();
@@ -192,15 +211,20 @@ export default function App() {
     } catch (err) { alert("Error logging request to database. Please try again."); }
   };
 
-  // --- Database Action Handlers ---
   const handleApproveRequest = async (reqId) => {
-    try { await updateDoc(doc(db, "requests", reqId), { status: 'Approved' }); } 
-    catch (err) { alert("Error updating request status."); }
+    const targetRequest = requests.find(r => r.id === reqId);
+    try { 
+      await updateDoc(doc(db, "requests", reqId), { status: 'Approved' }); 
+      if (targetRequest) triggerEmailNotification(targetRequest, 'Approved');
+    } catch (err) { alert("Error updating request status."); }
   };
 
   const handleRejectRequest = async (reqId) => {
-    try { await updateDoc(doc(db, "requests", reqId), { status: 'Rejected' }); } 
-    catch (err) { alert("Error updating request status."); }
+    const targetRequest = requests.find(r => r.id === reqId);
+    try { 
+      await updateDoc(doc(db, "requests", reqId), { status: 'Rejected' }); 
+      if (targetRequest) triggerEmailNotification(targetRequest, 'Rejected');
+    } catch (err) { alert("Error updating request status."); }
   };
 
   const handleReturnRequest = async (reqId) => {
@@ -211,7 +235,7 @@ export default function App() {
   const filteredInventory = inventory.filter(item => item.category === activeTab && !item.hidden);
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 font-sans antialiased selection:bg-indigo-500/20">
+    <div className="min-h-screen bg-slate-100 text-slate-800 font-sans antialiased pb-16 relative selection:bg-indigo-500/20">
       
       {/* Screwdriver Modal */}
       {isSDModalOpen && (
@@ -268,8 +292,6 @@ export default function App() {
       {/* ADMIN CONTROL PANEL */}
       {currentView === 'admin' && (
         <main className="max-w-7xl mx-auto p-4 md:p-8">
-          
-          {/* Security Gate */}
           {!isAdminUnlocked ? (
             <div className="max-w-sm mx-auto mt-20 bg-white p-8 rounded-3xl shadow-xl border border-slate-200 text-center">
               <div className="h-16 w-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl">🔒</div>
@@ -289,8 +311,6 @@ export default function App() {
               </form>
             </div>
           ) : (
-            
-            /* Admin Dashboard */
             <div className="space-y-8 animate-in fade-in zoom-in-95 duration-200">
               <div className="flex justify-between items-end">
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight">System Dashboard</h2>
@@ -298,8 +318,6 @@ export default function App() {
               </div>
 
               <section className="space-y-4">
-                
-                {/* Tracker Tabs */}
                 <div className="flex bg-slate-200/80 p-1 rounded-xl w-full sm:w-fit shadow-inner">
                   {['Pending', 'Approved', 'History'].map((tab) => (
                     <button 
@@ -315,7 +333,6 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Filtered Request Table */}
                 <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
                   <table className="w-full text-left text-base whitespace-nowrap">
                     <thead>
@@ -327,8 +344,6 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      
-                      {/* Determine which requests to show based on the active tab */}
                       {(() => {
                         const visibleRequests = requests.filter(r => adminTab === 'History' ? (r.status === 'Returned' || r.status === 'Rejected') : r.status === adminTab);
                         if (visibleRequests.length === 0) {
@@ -354,32 +369,26 @@ export default function App() {
                               ))}
                             </td>
                             <td className="px-5 py-4 text-right">
-                              
-                              {/* Dynamic Buttons based on status */}
                               {req.status === 'Pending' && (
                                 <div className="space-x-3">
                                   <button onClick={() => handleRejectRequest(req.id)} className="text-slate-500 hover:text-red-600 font-bold text-sm">Decline</button>
                                   <button onClick={() => handleApproveRequest(req.id)} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-lg text-sm font-black shadow-md">Approve</button>
                                 </div>
                               )}
-
                               {req.status === 'Approved' && (
                                 <button onClick={() => handleReturnRequest(req.id)} className="bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200 px-4 py-2 rounded-lg text-sm font-black shadow-sm transition-colors">
                                   Mark as Returned
                                 </button>
                               )}
-
                               {(req.status === 'Returned' || req.status === 'Rejected') && (
                                 <span className={`px-3 py-1 rounded-full text-xs font-black tracking-wide ${req.status === 'Returned' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                                   {req.status}
                                 </span>
                               )}
-
                             </td>
                           </tr>
                         ));
                       })()}
-                      
                     </tbody>
                   </table>
                 </div>
@@ -399,23 +408,16 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      
-                      {/* Group items by category to make the table scannable */}
                       {['Equipment', 'Tools', 'Accessories', 'Services'].map((category) => {
                         const categoryItems = inventory.filter(i => i.category === category && !i.hidden && !i.isScrewdriverTrigger);
-                        
                         if (categoryItems.length === 0) return null;
-
                         return (
                           <React.Fragment key={category}>
-                            {/* Category Sub-header Row */}
                             <tr className="bg-slate-50/80">
                               <td colSpan="5" className="px-4 py-2 font-bold text-xs uppercase tracking-widest text-slate-500">
                                 {category}
                               </td>
                             </tr>
-                            
-                            {/* Items inside this category */}
                             {categoryItems.map((item) => (
                               <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                                 <td className="p-4 font-medium text-slate-700 flex items-center gap-3">
@@ -439,7 +441,6 @@ export default function App() {
                           </React.Fragment>
                         );
                       })}
-
                     </tbody>
                   </table>
                 </div>
@@ -449,7 +450,7 @@ export default function App() {
         </main>
       )}
 
-      {/* STUDENT SUBMISSION SCREEN (Kept exactly the same) */}
+      {/* STUDENT SUBMISSION SCREEN */}
       {currentView === 'student' && (
         <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
           {showSuccessScreen && (
@@ -550,6 +551,11 @@ export default function App() {
           </div>
         </main>
       )}
+
+      {/* Persistent Corner Credits Footer */}
+      <footer className="absolute bottom-4 right-6 text-xs font-mono font-medium text-slate-400 select-none pointer-events-none opacity-80">
+        Developed by <span className="text-indigo-500/90 font-bold">@zoidabyte</span>
+      </footer>
     </div>
   );
 }
