@@ -266,8 +266,8 @@ export default function App() {
       )}
 
 <div className="flex items-center justify-center gap-3 py-6">
-<img src="https://drive.google.com/uc?export=view&id=1zMVyfkdNQAKVbNaykYemI9FTUq8Cd9MN" alt="Pasci Logo" className="h-10 w-10 object-contain" />
-<img src="https://drive.google.com/uc?export=view&id=171HKPXnRzzD24HwTd27cvbRC3Mr1xOtn" alt="Irys Logo" className="h-10 w-10 object-contain" />
+  <img src="/pasci.png" alt="Pasci Logo" className="h-10 w-10 object-contain" />
+  <img src="/irys.png" alt="Irys Logo" className="h-10 w-10 object-contain" />
   <h1 className="text-3xl font-bold text-slate-900 tracking-tight ml-2">
     Pascian Robotics Hub
   </h1>
