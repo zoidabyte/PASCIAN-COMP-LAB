@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { SpeedInsights } from "@vercel/speed-insights/next"
-
 // --- Firebase Imports ---
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc } from 'firebase/firestore';
