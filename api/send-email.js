@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   // Modern, clean styled HTML structure for the notification email
   const htmlContent = `
     <div style="font-family: sans-serif; max-width: 600px; color: #334155; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; margin: 0 auto;">
-      <h2 style="color: #4f46e5; margin-top: 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Lab Pulse Notification</h2>
+      <h2 style="color: #4f46e5; margin-top: 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Robotics Hub Notification</h2>
       <p style="font-size: 16px; margin-top: 20px;">Hello <strong>${studentName}</strong>,</p>
       <p style="font-size: 15px; line-height: 1.6;">The status of your equipment borrow request has been updated to: 
          <span style="font-weight: bold; padding: 3px 8px; border-radius: 6px; background-color: ${status === 'Approved' ? '#ecfdf5' : '#fef2f2'}; color: ${status === 'Approved' ? '#059669' : '#dc2626'};">${status}</span>.
@@ -38,7 +38,6 @@ export default async function handler(req, res) {
   });
 
   try {
-    // Fire off the email to the student
     await transporter.sendMail({
       from: `"Pascian Robotics Hub" <${process.env.EMAIL_USER}>`,
       to: to, // Dynamic student email recipient
