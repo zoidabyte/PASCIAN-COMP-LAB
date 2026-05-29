@@ -68,7 +68,7 @@ export default function App() {
   // --- Security State ---
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
   const [pinInput, setPinInput] = useState('');
-  const ADMIN_PASSCODE = "1234";
+  const ADMIN_PASSCODE = "0029";
 
   // --- Admin Dashboard State ---
   const [adminTab, setAdminTab] = useState('Pending'); 
