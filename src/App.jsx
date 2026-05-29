@@ -62,25 +62,26 @@ const getMinBorrowDate = () => {
 
 export default function App() {
   const [currentView, setCurrentView] = useState('student');
-  const [isLockedToStudent, setIsLockedToStudent] = useState(false); 
-  
+  const [isLockedToStudent, setIsLockedToStudent] = useState(false);
+
   // --- Security State ---
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
   const [pinInput, setPinInput] = useState('');
-  const ADMIN_PASSCODE = "1234"; 
-  
+  const ADMIN_PASSCODE = "1234";
+
   // --- Admin Dashboard State ---
   const [adminTab, setAdminTab] = useState('Pending'); // Controls which requests are visible
 
   const [inventory, setInventory] = useState(INITIAL_INVENTORY);
   const [requests, setRequests] = useState([]);
-  
+
   const [activeTab, setActiveTab] = useState('Tools'); 
   const [cart, setCart] = useState([]); 
   const [showSuccessScreen, setShowSuccessScreen] = useState(false);
   
   const [isSDModalOpen, setIsSDModalOpen] = useState(false);
   const [sdCounts, setSdCounts] = useState({ 'TL-SD-PH': 0, 'TL-SD-FL': 0, 'TL-SD-TX': 0, 'TL-SD-HX': 0 });
+
   const [studentForm, setStudentForm] = useState({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '', borrowDate: '' });
 
   useEffect(() => {
@@ -130,7 +131,7 @@ export default function App() {
     e.preventDefault();
     if (pinInput === ADMIN_PASSCODE) {
       setIsAdminUnlocked(true);
-      setPinInput(''); 
+      setPinInput('');
     } else {
       alert("Incorrect PIN. Access Denied.");
       setPinInput('');
@@ -330,7 +331,6 @@ export default function App() {
                       {/* Determine which requests to show based on the active tab */}
                       {(() => {
                         const visibleRequests = requests.filter(r => adminTab === 'History' ? (r.status === 'Returned' || r.status === 'Rejected') : r.status === adminTab);
-                        
                         if (visibleRequests.length === 0) {
                           return <tr><td colSpan="4" className="p-8 text-center text-slate-400">No {adminTab.toLowerCase()} requests right now.</td></tr>;
                         }
@@ -386,31 +386,60 @@ export default function App() {
               </section>
 
               <section className="space-y-4">
-                <h3 className="text-base font-black text-slate-900 tracking-wide uppercase">Live Inventory Tracker</h3>
-                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
-                  <table className="w-full text-left text-base whitespace-nowrap">
+                <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2">Live Inventory Tracker</h3>
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm overflow-x-auto">
+                  <table className="w-full text-left text-sm whitespace-nowrap">
                     <thead>
-                      <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
-                        <th className="p-5 font-bold">Item</th>
-                        <th className="p-5 text-center font-bold">Total Stock</th>
-                        <th className="p-5 text-center font-bold text-emerald-600">Available</th>
-                        <th className="p-5 text-center font-bold text-orange-500">Pending</th>
-                        <th className="p-5 text-center font-bold text-violet-600">Borrowed Out</th>
+                      <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
+                        <th className="p-4 font-semibold">Item</th>
+                        <th className="p-4 text-center font-semibold">Total Stock</th>
+                        <th className="p-4 text-center font-semibold text-emerald-600">Available</th>
+                        <th className="p-4 text-center font-semibold text-orange-500">Pending</th>
+                        <th className="p-4 text-center font-semibold text-violet-600">Borrowed Out</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {inventory.filter(i => !i.hidden && !i.isScrewdriverTrigger).map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50/50">
-                          <td className="p-5 font-bold text-slate-800 flex items-center gap-3">
-                            <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-1 rounded">{item.id}</span>
-                            {item.name}
-                          </td>
-                          <td className="p-5 text-center font-mono">{item.category === 'Services' ? '-' : item.total}</td>
-                          <td className="p-5 text-center font-mono font-black text-emerald-600">{item.category === 'Services' ? '-' : item.available}</td>
-                          <td className="p-5 text-center font-mono font-bold text-orange-500">{item.pending}</td>
-                          <td className="p-5 text-center font-mono font-bold text-violet-600">{item.borrowed}</td>
-                        </tr>
-                      ))}
+                      
+                      {/* Group items by category to make the table scannable */}
+                      {['Equipment', 'Tools', 'Accessories', 'Services'].map((category) => {
+                        const categoryItems = inventory.filter(i => i.category === category && !i.hidden && !i.isScrewdriverTrigger);
+                        
+                        if (categoryItems.length === 0) return null;
+
+                        return (
+                          <React.Fragment key={category}>
+                            {/* Category Sub-header Row */}
+                            <tr className="bg-slate-50/80">
+                              <td colSpan="5" className="px-4 py-2 font-bold text-xs uppercase tracking-widest text-slate-500">
+                                {category}
+                              </td>
+                            </tr>
+                            
+                            {/* Items inside this category */}
+                            {categoryItems.map((item) => (
+                              <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="p-4 font-medium text-slate-700 flex items-center gap-3">
+                                  <span className="text-xs text-slate-400 font-mono bg-white border border-slate-200 px-2 py-0.5 rounded shadow-sm">{item.id}</span>
+                                  {item.name}
+                                </td>
+                                <td className="p-4 text-center text-slate-600">
+                                  {item.category === 'Services' ? '-' : item.total}
+                                </td>
+                                <td className="p-4 text-center font-semibold text-emerald-600">
+                                  {item.category === 'Services' ? '-' : item.available}
+                                </td>
+                                <td className="p-4 text-center font-medium text-orange-500">
+                                  {item.pending}
+                                </td>
+                                <td className="p-4 text-center font-medium text-violet-600">
+                                  {item.borrowed}
+                                </td>
+                              </tr>
+                            ))}
+                          </React.Fragment>
+                        );
+                      })}
+
                     </tbody>
                   </table>
                 </div>
@@ -476,7 +505,7 @@ export default function App() {
                 </h3>
                 
                 <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                  {cart.length === 0 ? <p className="text-base text-slate-400 text-center py-8 font-medium">No items inside your cart yet. Tap anything from the catalog above to add.</p> : 
+                   {cart.length === 0 ? <p className="text-base text-slate-400 text-center py-8 font-medium">No items inside your cart yet. Tap anything from the catalog above to add.</p> : 
                     cart.map((cartItem) => (
                     <div key={cartItem.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
                       <span className="text-base font-bold text-slate-800 truncate pr-2 max-w-[150px]">{cartItem.name}</span>
@@ -486,7 +515,7 @@ export default function App() {
                         <button type="button" onClick={() => handleUpdateCartQuantity(cartItem.id, 1)} className="h-9 w-9 bg-white border border-slate-200 rounded-lg text-lg font-black flex items-center justify-center shadow-sm active:bg-slate-100">+</button>
                         <button type="button" onClick={() => handleRemoveFromCart(cartItem.id)} className="text-slate-400 hover:text-red-500 font-black text-2xl pl-1 active:scale-90 transition-transform">×</button>
                       </div>
-                    </div>
+                     </div>
                   ))}
                 </div>
 
@@ -499,7 +528,7 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-3">
                     <select required value={studentForm.gradeLevel} onChange={(e) => setStudentForm({...studentForm, gradeLevel: e.target.value, gradeSection: ''})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3.5 text-base shadow-sm focus:outline-none focus:border-indigo-500 focus:bg-white">
                       <option value="">Grade</option>
-                      {Object.keys(GRADE_SECTIONS).map(grade => <option key={grade} value={grade}>{grade}</option>)}
+                       {Object.keys(GRADE_SECTIONS).map(grade => <option key={grade} value={grade}>{grade}</option>)}
                     </select>
                     <select required disabled={!studentForm.gradeLevel} value={studentForm.gradeSection} onChange={(e) => setStudentForm({...studentForm, gradeSection: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3.5 text-base shadow-sm disabled:opacity-50 focus:outline-none focus:border-indigo-500 focus:bg-white">
                       <option value="">Section</option>
