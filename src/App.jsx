@@ -265,17 +265,13 @@ export default function App() {
         </div>
       )}
 
-      {/* Header */}
-      <header className="sticky top-0 z-50 px-4 py-4 flex justify-between items-center bg-white border-b border-slate-200 shadow-md">
-        <div className="flex items-center space-x-3">
-          <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-400 flex items-center justify-center shadow-md shrink-0">
-            <span className="font-black text-white text-lg">PRH</span>
-          </div>
-          <div>
-            <h1 className="text-base font-black tracking-tight text-slate-900 uppercase">Pascian Robotics Hub</h1>
-            <p className="text-xs tracking-wider text-indigo-600 font-mono font-bold">Equipment Portal</p>
-          </div>
-        </div>
+<div className="flex items-center justify-center gap-3 py-6">
+  <img src="/pasci.png" alt="Pasci Logo" className="h-10 w-10 object-contain" />
+  <img src="/irys.png" alt="Irys Logo" className="h-10 w-10 object-contain" />
+  <h1 className="text-3xl font-bold text-slate-900 tracking-tight ml-2">
+    Pascian Robotics Hub
+  </h1>
+</div>
         
         {!isLockedToStudent ? (
           <div className="flex bg-slate-100 border border-slate-200 p-1 rounded-xl">
@@ -287,7 +283,7 @@ export default function App() {
             Portal
           </span>
         )}
-      </header>
+
 
       {/* ADMIN CONTROL PANEL */}
       {currentView === 'admin' && (
