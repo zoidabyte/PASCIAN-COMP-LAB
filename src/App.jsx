@@ -240,7 +240,6 @@ export default function App() {
 
   const handleNavClick = (item) => {
     setUiTab(item);
-    // Explicitly handle routing so Admins stay Admins and Students stay Students
     if (!isLockedToStudent && currentView === 'admin') {
       setCurrentView('admin');
     } else {
@@ -319,10 +318,10 @@ export default function App() {
         {/* Sidebar Navigation */}
         <aside className={`w-64 border-r flex flex-col transition-colors duration-500 backdrop-blur-xl ${isDarkMode ? 'bg-slate-900/70 border-slate-800' : 'bg-white/70 border-slate-200'}`}>
           <div className="p-6 border-b border-inherit">
-            <h1 className="text-2xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-cyan-500 drop-shadow-sm">
-              Robotics Hub
+            <h1 className="text-2xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-cyan-500 drop-shadow-sm leading-tight">
+              Pascian<br/>Robotics Hub
             </h1>
-            <p className="text-xs uppercase tracking-widest mt-1 opacity-60 font-mono font-bold">System Terminal</p>
+            <p className="text-xs uppercase tracking-widest mt-2 opacity-60 font-mono font-bold">System Terminal</p>
           </div>
           <nav className="flex-1 p-4 space-y-2">
             {navItems.map((item) => (
@@ -347,7 +346,7 @@ export default function App() {
             {/* Dynamic Header */}
             <header className="flex justify-between items-center">
               <h2 className={`text-3xl font-black tracking-tight flex items-center gap-3 font-mono ${theme.textMain}`}>
-                <span className="opacity-40">&gt;</span> {uiTab} {isAdminUnlocked && currentView === 'admin' && <span className="text-sm font-sans bg-emerald-500/20 text-emerald-500 px-3 py-1 rounded-full ml-2">Unlocked</span>}
+                <span className="opacity-40">&gt;</span> {uiTab}
               </h2>
             </header>
 
@@ -499,9 +498,24 @@ export default function App() {
 
             {/* VIEW 3: LIVE INVENTORY TRACKER (ADMIN VIEW ONLY) */}
             {uiTab === 'Inventory' && currentView === 'admin' && isAdminUnlocked && (
-              <div className="space-y-8 animate-in fade-in duration-300">
-                <section className="space-y-4">
-                  <h3 className={`text-xl font-bold border-b pb-2 ${theme.textMain} ${theme.border}`}>Live Inventory Tracker</h3>
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <section className="space-y-6">
+                  
+                  {/* Centered Category Tabs */}
+                  <div className="flex justify-center">
+                    <div className={`flex p-1.5 rounded-2xl w-full max-w-2xl shadow-inner overflow-x-auto gap-1 ${isDarkMode ? 'bg-slate-900/60' : 'bg-slate-200/60'}`}>
+                      {['Equipment', 'Tools', 'Accessories', 'Services'].map((tab) => (
+                        <button 
+                          key={tab} 
+                          onClick={() => setActiveTab(tab)} 
+                          className={`px-5 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap flex-1 text-center active:scale-95 ${activeTab === tab ? theme.tabActive : theme.tabInactive}`}
+                        >
+                          {tab}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className={`${theme.card} border rounded-xl overflow-hidden shadow-sm overflow-x-auto backdrop-blur-md`}>
                     <table className="w-full text-left border-collapse min-w-[800px]">
                       <thead>
@@ -514,39 +528,35 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-inherit">
-                        {['Equipment', 'Tools', 'Accessories', 'Services'].map(category => {
-                          const items = inventory.filter(i => i.category === category && !i.hidden);
-                          if (items.length === 0) return null;
-                          return (
-                            <React.Fragment key={category}>
-                              <tr className={isDarkMode ? 'bg-slate-800/40' : 'bg-slate-50'}>
-                                <td colSpan="5" className={`px-4 py-2 font-black text-xs uppercase tracking-widest ${theme.textMuted}`}>
-                                  {category}
-                                </td>
-                              </tr>
-                              {items.map(item => (
-                                <tr key={item.id} className="transition-colors hover:bg-black/5">
-                                  <td className={`p-4 font-medium flex items-center gap-3 ${theme.textMain}`}>
-                                    <span className={`text-[10px] font-mono px-2 py-1 rounded border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>{item.id}</span>
-                                    {item.name}
-                                  </td>
-                                  <td className={`p-4 text-center ${theme.textMuted}`}>
-                                    {item.category === 'Services' ? '-' : item.total}
-                                  </td>
-                                  <td className="p-4 text-center font-semibold text-emerald-500">
-                                    {item.category === 'Services' ? '-' : item.available}
-                                  </td>
-                                  <td className="p-4 text-center font-medium text-orange-500">
-                                    {item.pending}
-                                  </td>
-                                  <td className="p-4 text-center font-medium text-violet-500">
-                                    {item.borrowed}
-                                  </td>
-                                </tr>
-                              ))}
-                            </React.Fragment>
-                          );
-                        })}
+                        {inventory
+                          .filter(i => i.category === activeTab && !i.hidden)
+                          .map(item => (
+                            <tr key={item.id} className="transition-colors hover:bg-black/5">
+                              <td className={`p-4 font-medium flex items-center gap-3 ${theme.textMain}`}>
+                                <span className={`text-[10px] font-mono px-2 py-1 rounded border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>{item.id}</span>
+                                {item.name}
+                              </td>
+                              <td className={`p-4 text-center ${theme.textMuted}`}>
+                                {item.category === 'Services' ? '-' : item.total}
+                              </td>
+                              <td className="p-4 text-center font-semibold text-emerald-500">
+                                {item.category === 'Services' ? '-' : item.available}
+                              </td>
+                              <td className="p-4 text-center font-medium text-orange-500">
+                                {item.pending}
+                              </td>
+                              <td className="p-4 text-center font-medium text-violet-500">
+                                {item.borrowed}
+                              </td>
+                            </tr>
+                        ))}
+                        {inventory.filter(i => i.category === activeTab && !i.hidden).length === 0 && (
+                          <tr>
+                            <td colSpan="5" className={`p-8 text-center text-sm font-medium ${theme.textMuted}`}>
+                              No items found in this category.
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
