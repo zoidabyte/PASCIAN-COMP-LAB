@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-
 // --- Firebase Imports ---
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc } from 'firebase/firestore';
@@ -19,8 +18,9 @@ const firebaseConfig = {
 // Initialize Firebase, Firestore, & Auth
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const auth = getAuth(app); // INITIALIZE AUTH
+const auth = getAuth(app); 
 
+// --- Static Data Structures ---
 const GRADE_SECTIONS = {
   'Grade 7': ['Archimedes', 'Edison', 'Galileo', 'Newton'],
   'Grade 8': ['Aristotle', 'Darwin', 'Mendel', 'Linnaeus'],
@@ -81,21 +81,23 @@ export default function App() {
   const [sdCounts, setSdCounts] = useState({ 'TL-SD-PH': 0, 'TL-SD-FL': 0, 'TL-SD-TX': 0, 'TL-SD-HX': 0 });
   const [studentForm, setStudentForm] = useState({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '', borrowDate: '' });
 
-  // --- NEW AUTH STATES ---
+  // --- NEW AUTH STATES (Blank Email) ---
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
-  const [adminEmail, setAdminEmail] = useState('adminroboticshub@gmail.com'); // Pre-filled for convenience
+  const [adminEmail, setAdminEmail] = useState(''); 
   const [adminPassword, setAdminPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  // --- EFFECTS ---
+  // --- EFFECTS (Strict URL Routing) ---
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('mode') === 'student') {
       setCurrentView('student');
       setIsLockedToStudent(true); 
+      setUiTab('Inventory');
     } else {
       setCurrentView('admin');
       setIsLockedToStudent(false);
+      setUiTab('Borrowed'); // Default admins directly to the Borrowed dashboard
     }
   }, []);
 
@@ -149,27 +151,29 @@ export default function App() {
     }
   };
 
-  // NEW FIREBASE LOGIN LOGIC
   const handleAdminLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
     try {
       await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
       setIsAdminUnlocked(true);
-      setAdminPassword(''); // Clear password field for security
+      setAdminPassword(''); 
     } catch (error) {
       setLoginError("Invalid Email or Password. Access Denied.");
       setAdminPassword('');
     }
   };
 
-  // NEW LOGOUT LOGIC
   const handleAdminLogout = async () => {
     await signOut(auth);
     setIsAdminUnlocked(false);
+    setAdminEmail(''); // Clear email on logout
   };
 
   const handleAddToCart = (item) => {
+    // Completely block adding to cart if not in student mode
+    if (!isLockedToStudent) return; 
+
     if (item.isScrewdriverTrigger) {
       setIsSDModalOpen(true);
       return;
@@ -253,7 +257,6 @@ export default function App() {
 
   const handleNavClick = (item) => {
     setUiTab(item);
-    if (item === 'Inventory') setCurrentView('student');
     if (item === 'Borrowed') { setCurrentView('admin'); setAdminTab('Pending'); }
     if (item === 'History') { setCurrentView('admin'); setAdminTab('History'); }
   };
@@ -296,7 +299,7 @@ export default function App() {
       </div>
 
       {/* SCREWDRIVER MODAL */}
-      {isSDModalOpen && (
+      {isSDModalOpen && isLockedToStudent && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className={`${theme.card} rounded-2xl p-6 w-full max-w-md shadow-2xl border backdrop-blur-xl`}>
             <h3 className={`font-black ${theme.textMain} text-xl mb-4`}>Select Screwdrivers</h3>
@@ -395,10 +398,12 @@ export default function App() {
               </div>
             )}
 
-            {/* VIEW 2: INVENTORY */}
-            {uiTab === 'Inventory' && currentView === 'student' && (
+            {/* VIEW 2: INVENTORY (Dynamic: Borrow for Student, Read-Only for Admin) */}
+            {uiTab === 'Inventory' && (
               <div className="space-y-6 animate-in fade-in duration-300">
-                {showSuccessScreen && (
+                
+                {/* Only show Success Screen in Student Mode */}
+                {showSuccessScreen && isLockedToStudent && (
                   <div className="bg-emerald-500/10 border border-emerald-500/30 backdrop-blur-md rounded-2xl p-5 flex flex-col sm:flex-row gap-4 justify-between items-center text-emerald-600 shadow-md">
                     <div className="flex items-center gap-4">
                       <div className="h-12 w-12 shrink-0 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black text-xl shadow-inner">✓</div>
@@ -411,18 +416,33 @@ export default function App() {
                   </div>
                 )}
 
+                {/* Show Admin Read-Only Notice if accessed from Admin Panel */}
+                {!isLockedToStudent && (
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-blue-500 text-sm font-bold flex items-center gap-3">
+                    <span className="text-xl">ℹ️</span> 
+                    Admin Visual Catalog: This inventory view is Read-Only. Borrowing requires the student QR Portal link.
+                  </div>
+                )}
+
                 <div className={`flex p-1.5 rounded-2xl w-full shadow-inner overflow-x-auto gap-1 ${isDarkMode ? 'bg-slate-900/60' : 'bg-slate-200/60'}`}>
                   {['Equipment', 'Tools', 'Accessories', 'Services'].map((tab) => (
                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap flex-1 text-center active:scale-95 ${activeTab === tab ? theme.tabActive : theme.tabInactive}`}>{tab}</button>
                   ))}
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                  <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className={`grid grid-cols-1 ${isLockedToStudent ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-6 items-start`}>
+                  
+                  {/* The Grid: Spans 2 columns for students (leaving room for cart), spans full width for admin */}
+                  <div className={`${isLockedToStudent ? 'lg:col-span-2 grid-cols-1 sm:grid-cols-2' : 'col-span-full grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'} grid gap-4`}>
                     {filteredInventory.map((item) => {
                       const isAvailable = item.category === 'Services' ? !item.isLocked : item.available > 0;
                       return (
-                        <div key={item.id} onClick={() => !item.isLocked && isAvailable && handleAddToCart(item)} className={`${theme.card} border p-5 rounded-2xl backdrop-blur-md transition-all flex flex-col justify-between min-h-[140px] ${item.isLocked ? 'opacity-40' : isAvailable ? 'cursor-pointer hover:border-indigo-500 active:scale-[0.99]' : 'opacity-50'}`}>
+                        <div 
+                          key={item.id} 
+                          onClick={() => !item.isLocked && isAvailable && handleAddToCart(item)} 
+                          className={`${theme.card} border p-5 rounded-2xl backdrop-blur-md transition-all flex flex-col justify-between min-h-[140px] 
+                            ${item.isLocked ? 'opacity-40' : isAvailable ? (isLockedToStudent ? 'cursor-pointer hover:border-indigo-500 active:scale-[0.99]' : 'opacity-90') : 'opacity-50'}`}
+                        >
                           <div>
                             <div className="flex justify-between items-center mb-2">
                               <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded ${isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>{item.id}</span>
@@ -432,7 +452,9 @@ export default function App() {
                             </div>
                             <h3 className={`font-black mt-3 text-lg tracking-tight leading-tight ${theme.textMain}`}>{item.name}</h3>
                           </div>
-                          {isAvailable && (
+                          
+                          {/* Only show the 'Tap to add' footer if accessed via Student Mode */}
+                          {isAvailable && isLockedToStudent && (
                             <div className={`mt-4 pt-3 border-t flex justify-between items-center ${theme.border}`}>
                               <span className={`text-xs font-semibold ${theme.textMuted}`}>{item.isScrewdriverTrigger ? 'Tap to setup selection' : 'Tap to add to your bag'}</span>
                               <span className="text-indigo-500 font-black text-xl bg-indigo-500/10 h-8 w-8 rounded-full flex items-center justify-center">+</span>
@@ -443,56 +465,59 @@ export default function App() {
                     })}
                   </div>
 
-                  <div className="lg:col-span-1">
-                    <form onSubmit={handleBorrowSubmit} className={`${theme.card} border backdrop-blur-md rounded-3xl p-5 md:p-6 shadow-xl space-y-5 lg:sticky lg:top-24`}>
-                      <h3 className={`font-black text-xl border-b pb-3 flex items-center justify-between ${theme.textMain} ${theme.border}`}>
-                        <span>Selected Bag</span>
-                        <span className="bg-indigo-600 text-white font-mono text-xs px-2.5 py-1 rounded-full">{cart.reduce((sum, i) => sum + i.quantity, 0)} Items</span>
-                      </h3>
-                      
-                      <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                          {cart.length === 0 ? <p className={`text-base text-center py-8 font-medium ${theme.textMuted}`}>No items inside your cart yet.<br/>Tap anything from the catalog above to add.</p> : 
-                          cart.map((cartItem) => (
-                          <div key={cartItem.id} className={`flex justify-between items-center p-3 rounded-xl border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                            <span className={`text-base font-bold truncate pr-2 max-w-[150px] ${theme.textMain}`}>{cartItem.name}</span>
-                            <div className="flex items-center gap-3 shrink-0">
-                              <button type="button" onClick={() => handleUpdateCartQuantity(cartItem.id, -1)} className={`h-9 w-9 rounded-lg text-lg font-black flex items-center justify-center shadow-sm active:scale-95 ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-white hover:bg-slate-100'}`}>-</button>
-                              <span className={`text-base font-mono font-black w-5 text-center ${theme.textMain}`}>{cartItem.quantity}</span>
-                              <button type="button" onClick={() => handleUpdateCartQuantity(cartItem.id, 1)} className={`h-9 w-9 rounded-lg text-lg font-black flex items-center justify-center shadow-sm active:scale-95 ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-white hover:bg-slate-100'}`}>+</button>
-                              <button type="button" onClick={() => handleRemoveFromCart(cartItem.id)} className="text-slate-400 hover:text-red-500 font-black text-2xl pl-1 active:scale-90 transition-transform">×</button>
-                            </div>
-                            </div>
-                        ))}
-                      </div>
+                  {/* The Cart Form: Only visible if isLockedToStudent is TRUE */}
+                  {isLockedToStudent && (
+                    <div className="lg:col-span-1">
+                      <form onSubmit={handleBorrowSubmit} className={`${theme.card} border backdrop-blur-md rounded-3xl p-5 md:p-6 shadow-xl space-y-5 lg:sticky lg:top-24`}>
+                        <h3 className={`font-black text-xl border-b pb-3 flex items-center justify-between ${theme.textMain} ${theme.border}`}>
+                          <span>Selected Bag</span>
+                          <span className="bg-indigo-600 text-white font-mono text-xs px-2.5 py-1 rounded-full">{cart.reduce((sum, i) => sum + i.quantity, 0)} Items</span>
+                        </h3>
+                        
+                        <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                            {cart.length === 0 ? <p className={`text-base text-center py-8 font-medium ${theme.textMuted}`}>No items inside your cart yet.<br/>Tap anything from the catalog above to add.</p> : 
+                            cart.map((cartItem) => (
+                            <div key={cartItem.id} className={`flex justify-between items-center p-3 rounded-xl border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                              <span className={`text-base font-bold truncate pr-2 max-w-[150px] ${theme.textMain}`}>{cartItem.name}</span>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <button type="button" onClick={() => handleUpdateCartQuantity(cartItem.id, -1)} className={`h-9 w-9 rounded-lg text-lg font-black flex items-center justify-center shadow-sm active:scale-95 ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-white hover:bg-slate-100'}`}>-</button>
+                                <span className={`text-base font-mono font-black w-5 text-center ${theme.textMain}`}>{cartItem.quantity}</span>
+                                <button type="button" onClick={() => handleUpdateCartQuantity(cartItem.id, 1)} className={`h-9 w-9 rounded-lg text-lg font-black flex items-center justify-center shadow-sm active:scale-95 ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-white hover:bg-slate-100'}`}>+</button>
+                                <button type="button" onClick={() => handleRemoveFromCart(cartItem.id)} className="text-slate-400 hover:text-red-500 font-black text-2xl pl-1 active:scale-90 transition-transform">×</button>
+                              </div>
+                              </div>
+                          ))}
+                        </div>
 
-                      <div className={`space-y-4 pt-2 border-t ${theme.border}`}>
-                        <div>
-                          <label className={`text-xs uppercase font-black ml-1 tracking-wide ${theme.textMuted}`}>Borrower Info</label>
-                          <input required type="text" placeholder="Full Name" value={studentForm.name} onChange={(e) => setStudentForm({...studentForm, name: e.target.value})} className={`w-full rounded-xl px-4 py-3.5 mt-1 text-base shadow-inner ${theme.input}`} />
+                        <div className={`space-y-4 pt-2 border-t ${theme.border}`}>
+                          <div>
+                            <label className={`text-xs uppercase font-black ml-1 tracking-wide ${theme.textMuted}`}>Borrower Info</label>
+                            <input required type="text" placeholder="Full Name" value={studentForm.name} onChange={(e) => setStudentForm({...studentForm, name: e.target.value})} className={`w-full rounded-xl px-4 py-3.5 mt-1 text-base shadow-inner ${theme.input}`} />
+                          </div>
+                          <input required type="email" placeholder="School Email Address" value={studentForm.email} onChange={(e) => setStudentForm({...studentForm, email: e.target.value})} className={`w-full rounded-xl px-4 py-3.5 text-base shadow-inner ${theme.input}`} />
+                          <div className="grid grid-cols-2 gap-3">
+                            <select required value={studentForm.gradeLevel} onChange={(e) => setStudentForm({...studentForm, gradeLevel: e.target.value, gradeSection: ''})} className={`w-full rounded-xl px-3 py-3.5 text-base shadow-sm ${theme.input}`}>
+                              <option value="">Grade</option>
+                              {Object.keys(GRADE_SECTIONS).map(grade => <option key={grade} value={grade}>{grade}</option>)}
+                            </select>
+                            <select required disabled={!studentForm.gradeLevel} value={studentForm.gradeSection} onChange={(e) => setStudentForm({...studentForm, gradeSection: e.target.value})} className={`w-full rounded-xl px-3 py-3.5 text-base shadow-sm disabled:opacity-50 ${theme.input}`}>
+                              <option value="">Section</option>
+                              {studentForm.gradeLevel && GRADE_SECTIONS[studentForm.gradeLevel].map(sec => <option key={sec} value={sec}>{sec}</option>)}
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <label className={`text-xs uppercase font-black ml-1 tracking-wide ${theme.textMuted}`}>Target Collection Date</label>
+                            <input required type="date" min={getMinBorrowDate()} value={studentForm.borrowDate} onChange={(e) => setStudentForm({...studentForm, borrowDate: e.target.value})} className={`w-full rounded-xl px-4 py-3.5 text-base shadow-inner ${theme.input}`} />
+                          </div>
+                          <div>
+                            <label className={`text-xs uppercase font-black ml-1 tracking-wide ${theme.textMuted}`}>Activity Purpose</label>
+                            <textarea required rows="2" placeholder="e.g., Robotics competition project..." value={studentForm.purpose} onChange={(e) => setStudentForm({...studentForm, purpose: e.target.value})} className={`w-full rounded-xl px-4 py-3.5 mt-1 text-base shadow-inner ${theme.input}`}></textarea>
+                          </div>
+                          <button type="submit" className="w-full bg-indigo-600 text-white py-4 mt-2 rounded-xl text-base font-black tracking-wide shadow-lg shadow-indigo-500/30 hover:bg-indigo-500 active:scale-[0.98] transition-transform">Submit Request</button>
                         </div>
-                        <input required type="email" placeholder="School Email Address" value={studentForm.email} onChange={(e) => setStudentForm({...studentForm, email: e.target.value})} className={`w-full rounded-xl px-4 py-3.5 text-base shadow-inner ${theme.input}`} />
-                        <div className="grid grid-cols-2 gap-3">
-                          <select required value={studentForm.gradeLevel} onChange={(e) => setStudentForm({...studentForm, gradeLevel: e.target.value, gradeSection: ''})} className={`w-full rounded-xl px-3 py-3.5 text-base shadow-sm ${theme.input}`}>
-                            <option value="">Grade</option>
-                            {Object.keys(GRADE_SECTIONS).map(grade => <option key={grade} value={grade}>{grade}</option>)}
-                          </select>
-                          <select required disabled={!studentForm.gradeLevel} value={studentForm.gradeSection} onChange={(e) => setStudentForm({...studentForm, gradeSection: e.target.value})} className={`w-full rounded-xl px-3 py-3.5 text-base shadow-sm disabled:opacity-50 ${theme.input}`}>
-                            <option value="">Section</option>
-                            {studentForm.gradeLevel && GRADE_SECTIONS[studentForm.gradeLevel].map(sec => <option key={sec} value={sec}>{sec}</option>)}
-                          </select>
-                        </div>
-                        <div className="space-y-1">
-                          <label className={`text-xs uppercase font-black ml-1 tracking-wide ${theme.textMuted}`}>Target Collection Date</label>
-                          <input required type="date" min={getMinBorrowDate()} value={studentForm.borrowDate} onChange={(e) => setStudentForm({...studentForm, borrowDate: e.target.value})} className={`w-full rounded-xl px-4 py-3.5 text-base shadow-inner ${theme.input}`} />
-                        </div>
-                        <div>
-                          <label className={`text-xs uppercase font-black ml-1 tracking-wide ${theme.textMuted}`}>Activity Purpose</label>
-                          <textarea required rows="2" placeholder="e.g., Robotics competition project..." value={studentForm.purpose} onChange={(e) => setStudentForm({...studentForm, purpose: e.target.value})} className={`w-full rounded-xl px-4 py-3.5 mt-1 text-base shadow-inner ${theme.input}`}></textarea>
-                        </div>
-                        <button type="submit" className="w-full bg-indigo-600 text-white py-4 mt-2 rounded-xl text-base font-black tracking-wide shadow-lg shadow-indigo-500/30 hover:bg-indigo-500 active:scale-[0.98] transition-transform">Submit Request</button>
-                      </div>
-                    </form>
-                  </div>
+                      </form>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -509,21 +534,24 @@ export default function App() {
                     {loginError && <p className="text-red-500 text-sm font-bold mb-4">{loginError}</p>}
                     
                     <form onSubmit={handleAdminLogin} className="space-y-4">
-                      {/* Email input pre-filled for convenience */}
+                      {/* Blank Email Input */}
                       <input 
                         type="email" 
                         value={adminEmail} 
                         onChange={(e) => setAdminEmail(e.target.value)} 
-                        className={`w-full text-center text-sm font-mono rounded-xl px-4 py-3 opacity-60 ${theme.input}`}
-                        readOnly // Optional: Remove readOnly if you ever want to change it on the fly
+                        placeholder="Admin Email Address"
+                        className={`w-full text-center tracking-wide text-sm font-mono rounded-xl px-4 py-4 ${theme.input}`}
+                        required
+                        autoFocus
                       />
+                      {/* Password Input */}
                       <input 
                         type="password" 
                         value={adminPassword} 
                         onChange={(e) => setAdminPassword(e.target.value)} 
                         placeholder="Enter Password" 
                         className={`w-full text-center tracking-widest text-xl font-mono rounded-xl px-4 py-4 ${theme.input}`}
-                        autoFocus
+                        required
                       />
                       <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-xl font-black shadow-md shadow-indigo-500/30 hover:bg-indigo-500 active:scale-95 transition-all">Verify Credentials</button>
                     </form>
