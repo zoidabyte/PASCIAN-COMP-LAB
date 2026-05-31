@@ -187,28 +187,6 @@ export default function App() {
     setUiTab('Admin Login'); 
   };
 
-  // -- LOCAL INVENTORY MANAGEMENT (ADMIN SETTINGS) --
-  const toggleMaintenanceMode = async () => {
-    await setDoc(doc(db, "settings", "global"), { isMaintenanceMode: !isMaintenanceMode }, { merge: true });
-  };
-
-  const handleUpdateItemTotal = (id, newTotal) => {
-    setBaseInventory(prev => prev.map(item => item.id === id ? { ...item, total: Number(newTotal) } : item));
-  };
-
-  const handleAddNewItem = (e) => {
-    e.preventDefault();
-    if (baseInventory.some(i => i.id === newItem.id)) return alert("ID already exists!");
-    setBaseInventory(prev => [...prev, { ...newItem, total: Number(newItem.total), isLocked: false, hidden: false }]);
-    setNewItem({ id: '', name: '', category: 'Tools', total: 1 });
-  };
-
-  const handleDeleteItem = (id) => {
-    if(window.confirm("Are you sure you want to permanently delete this item? (Note: Refreshing will restore it)")) {
-      setBaseInventory(prev => prev.filter(item => item.id !== id));
-    }
-  };
-
   // -- CART FUNCTIONS --
   const handleAddToCart = (item) => {
     if (!isLockedToStudent || isMaintenanceMode) return;
