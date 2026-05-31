@@ -53,7 +53,7 @@ const INITIAL_INVENTORY = [
   { id: 'AC-KB', name: 'Keyboard', category: 'Accessories', total: 30 },
   { id: 'AC-MS', name: 'Mouse', category: 'Accessories', total: 35 },
   { id: 'AC-EX', name: 'Extension Cord', category: 'Accessories', total: 15 },
-  { id: 'EQ-HS', name: 'Headset', category: 'Accesories', total: 20 },
+  { id: 'EQ-HS', name: 'Headset', category: 'Accessories', total: 20 },
   { id: 'AC-HD', name: 'External Hard Drive', category: 'Accessories', total: 10 },
 
   // --- Hidden/Child Items ---
