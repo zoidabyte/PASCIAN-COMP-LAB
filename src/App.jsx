@@ -17,7 +17,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const auth = getAuth(app); 
+const auth = getAuth(app);
 
 // --- Static Data Structures ---
 const GRADE_SECTIONS = {
@@ -29,7 +29,7 @@ const GRADE_SECTIONS = {
   'Grade 12': ['Biyo', 'Del Mundo', 'Quisumbing', 'Zara']
 };
 
-// This is now just our "Seed" data for the first launch
+// Seed data for the first launch
 const INITIAL_INVENTORY = [
   { id: 'EQ-LP', name: 'Laptop', category: 'Equipment', total: 46 },
   { id: 'EQ-TB', name: 'Tablet', category: 'Equipment', total: 160 },
@@ -80,7 +80,7 @@ export default function App() {
 
   // --- AUTH STATES ---
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
-  const [adminEmail, setAdminEmail] = useState(''); 
+  const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
@@ -110,7 +110,7 @@ export default function App() {
     // 2. Listen to Inventory & Auto-Seed if empty
     const unsubInventory = onSnapshot(collection(db, "inventory"), (snapshot) => {
       if (snapshot.empty) {
-        // Seed the database on first load!
+        // Seed the database on first load
         INITIAL_INVENTORY.forEach(async (item) => {
           await setDoc(doc(db, "inventory", item.id), item);
         });
@@ -136,12 +136,18 @@ export default function App() {
 
     requests.forEach(req => {
       if (req.status === 'Pending') {
-        req.items.forEach(reqItem => {
+        req.items?.forEach(reqItem => { // Added optional chaining to prevent crash
           const match = updated.find(i => i.id === reqItem.itemId);
-          if (match) match.pending += reqItem.quantity;
+          if (match) {
+            match.pending += reqItem.quantity;
+            // Prevent over-borrowing by temporarily reserving pending stock
+            if (match.category !== 'Services') {
+              match.available = Math.max(0, match.available - reqItem.quantity);
+            }
+          }
         });
       } else if (req.status === 'Approved') {
-        req.items.forEach(reqItem => {
+        req.items?.forEach(reqItem => { // Added optional chaining
           const match = updated.find(i => i.id === reqItem.itemId);
           if (match) {
             match.borrowed += reqItem.quantity;
@@ -163,7 +169,7 @@ export default function App() {
       await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
       setIsAdminUnlocked(true);
       setAdminPassword(''); 
-      setUiTab('Borrowed'); 
+      setUiTab('Borrowed');
     } catch (error) {
       setLoginError("Invalid Email or Password. Access Denied.");
       setAdminPassword('');
@@ -209,8 +215,7 @@ export default function App() {
 
   // -- CART FUNCTIONS --
   const handleAddToCart = (item) => {
-    if (!isLockedToStudent || isMaintenanceMode) return; 
-
+    if (!isLockedToStudent || isMaintenanceMode) return;
     if (item.isScrewdriverTrigger) {
       setIsSDModalOpen(true);
       return;
@@ -272,10 +277,12 @@ export default function App() {
     try { await updateDoc(doc(db, "requests", reqId), { status: 'Approved' }); } 
     catch (err) { alert("Error updating request status."); }
   };
+
   const handleRejectRequest = async (reqId) => {
     try { await updateDoc(doc(db, "requests", reqId), { status: 'Rejected' }); } 
     catch (err) { alert("Error updating request status."); }
   };
+
   const handleReturnRequest = async (reqId) => {
     try { await updateDoc(doc(db, "requests", reqId), { status: 'Returned' }); } 
     catch (err) { alert("Error marking as returned."); }
@@ -285,9 +292,7 @@ export default function App() {
 
   const navItems = isLockedToStudent 
     ? ['Inventory'] 
-    : (isAdminUnlocked 
-        ? ['Inventory', 'Borrowed', 'History', 'Settings'] 
-        : ['Admin Login', 'Settings']);
+    : (isAdminUnlocked ? ['Inventory', 'Borrowed', 'History', 'Settings'] : ['Admin Login', 'Settings']);
 
   const handleNavClick = (item) => {
     setUiTab(item);
@@ -368,6 +373,7 @@ export default function App() {
                 </select>
               </div>
               <input required type="date" min={getMinBorrowDate()} value={studentForm.borrowDate} onChange={(e) => setStudentForm({...studentForm, borrowDate: e.target.value})} className={`w-full rounded-xl px-4 py-3.5 text-base shadow-inner ${theme.input}`} />
+              
               <textarea required rows="2" placeholder="Activity Purpose / Project Name" value={studentForm.purpose} onChange={(e) => setStudentForm({...studentForm, purpose: e.target.value})} className={`w-full rounded-xl px-4 py-3.5 text-base shadow-inner resize-none ${theme.input}`}></textarea>
               
               <div className="bg-red-500/10 border border-red-500/30 text-red-600 p-4 rounded-xl text-sm font-bold flex gap-3 items-start mt-2">
@@ -425,9 +431,7 @@ export default function App() {
               <button
                 key={item}
                 onClick={() => handleNavClick(item)}
-                className={`w-full text-left px-4 py-3 rounded-lg font-bold transition-all duration-300 flex items-center gap-3 ${
-                  uiTab === item ? theme.tabActive : theme.tabInactive
-                }`}
+                className={`w-full text-left px-4 py-3 rounded-lg font-bold transition-all duration-300 flex items-center gap-3 ${uiTab === item ? theme.tabActive : theme.tabInactive}`}
               >
                 <div className={`w-1.5 h-1.5 rounded-sm transition-all duration-300 ${uiTab === item ? 'bg-current shadow-[0_0_8px_currentColor]' : 'bg-transparent'}`}></div>
                 {item}
@@ -533,11 +537,13 @@ export default function App() {
                             <td className="p-3 text-xs font-mono">{item.id}</td>
                             <td className={`p-3 text-sm font-bold ${theme.textMain}`}>{item.name}</td>
                             <td className="p-3">
+                              {/* BUG FIX: Changed from onChange to onBlur with a key override to stop the text jump glitch */}
                               <input 
+                                key={`stock-${item.id}-${item.total}`}
                                 type="number" 
                                 min="0"
-                                value={item.total} 
-                                onChange={(e) => handleUpdateItemTotal(item.id, e.target.value)}
+                                defaultValue={item.total} 
+                                onBlur={(e) => handleUpdateItemTotal(item.id, e.target.value)}
                                 className={`w-20 px-2 py-1 rounded text-sm font-mono border outline-none ${theme.input}`}
                               />
                             </td>
@@ -635,7 +641,7 @@ export default function App() {
               </div>
             )}
 
-            {/* VIEW 4 & 5: BORROWED & HISTORY (ADMIN ONLY) -> Keeping existing layout for these as they were correct */}
+            {/* VIEW 4 & 5: BORROWED & HISTORY (ADMIN ONLY) */}
             {uiTab === 'Borrowed' && currentView === 'admin' && isAdminUnlocked && (
                <div className="space-y-6 animate-in fade-in duration-300">
                <div className={`${theme.card} border rounded-2xl overflow-hidden backdrop-blur-xl shadow-lg overflow-x-auto`}>
@@ -666,7 +672,8 @@ export default function App() {
                          </td>
                          <td className="p-4">
                            <ul className="space-y-1">
-                             {req.items.map((i, idx) => (
+                             {/* BUG FIX: Added ?. to prevent crashing if a database document is missing the items array */}
+                             {req.items?.map((i, idx) => (
                                <li key={idx} className={`text-sm ${theme.textMain}`}><span className="font-bold text-indigo-500 mr-2">{i.quantity}x</span>{i.itemName}</li>
                              ))}
                            </ul>
@@ -720,7 +727,8 @@ export default function App() {
                           </td>
                           <td className="p-4">
                             <ul className="space-y-1">
-                              {req.items.map((i, idx) => (
+                              {/* BUG FIX: Added ?. here as well */}
+                              {req.items?.map((i, idx) => (
                                 <li key={idx} className={`text-sm ${theme.textMain}`}><span className="font-bold text-indigo-500 mr-2">{i.quantity}x</span>{i.itemName}</li>
                               ))}
                             </ul>
