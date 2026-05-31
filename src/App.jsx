@@ -31,22 +31,39 @@ const GRADE_SECTIONS = {
 
 // Base Catalog Data (Now acts as the single source of truth instead of Firebase)
 const INITIAL_INVENTORY = [
+  // --- Equipment ---
   { id: 'EQ-LP', name: 'Laptop', category: 'Equipment', total: 46 },
   { id: 'EQ-TB', name: 'Tablet', category: 'Equipment', total: 160 },
   { id: 'EQ-MN', name: 'Monitor', category: 'Equipment', total: 25 },
+  { id: 'EQ-TV', name: 'TV', category: 'Equipment', total: 5 },
+  { id: 'EQ-PR', name: 'Printer', category: 'Equipment', total: 5 },
   { id: 'EQ-RB', name: 'Robotics Kit', category: 'Equipment', total: 30 },
+  { id: 'EQ-RT', name: 'Router', category: 'Equipment', total: 10 },
+  { id: 'EQ-HS', name: 'Headset', category: 'Equipment', total: 20 },
+  { id: 'EQ-UP', name: 'UPS', category: 'Equipment', total: 10 },
+
+  // --- Tools ---
+  { id: 'TL-VG', name: 'VGA Cable', category: 'Tools', total: 50 },
+  { id: 'TL-HD', name: 'HDMI Cable', category: 'Tools', total: 50 },
   { id: 'TL-LT', name: 'LAN Tester', category: 'Tools', total: 10 },
   { id: 'TL-CT', name: 'Crimping Tool', category: 'Tools', total: 15 },
   { id: 'TL-SD-SET', name: 'Screwdriver Set', category: 'Tools', total: 20, isScrewdriverTrigger: true },
+  { id: 'TL-BB', name: 'Bread Board', category: 'Tools', total: 40 },
+  { id: 'TL-SI', name: 'Soldering Iron', category: 'Tools', total: 10 },
+
+  // --- Accessories ---
+  { id: 'AC-KB', name: 'Keyboard', category: 'Accessories', total: 30 },
+  { id: 'AC-MS', name: 'Mouse', category: 'Accessories', total: 35 },
+  { id: 'AC-EX', name: 'Extension Cord', category: 'Accessories', total: 15 },
+  { id: 'AC-HD', name: 'External Hard Drive', category: 'Accessories', total: 10 },
+
+  // --- Hidden/Child Items ---
   { id: 'TL-SD-PH', name: 'Phillips Screwdriver', category: 'Tools', total: 5, hidden: true },
   { id: 'TL-SD-FL', name: 'Flathead Screwdriver', category: 'Tools', total: 5, hidden: true },
   { id: 'TL-SD-TX', name: 'Torx Screwdriver', category: 'Tools', total: 5, hidden: true },
   { id: 'TL-SD-HX', name: 'Hex Screwdriver', category: 'Tools', total: 5, hidden: true },
-  { id: 'TL-BB', name: 'Bread Board', category: 'Tools', total: 40 },
-  { id: 'TL-SI', name: 'Soldering Iron', category: 'Tools', total: 10 },
-  { id: 'AC-KB', name: 'Keyboard', category: 'Accessories', total: 30 },
-  { id: 'AC-MS', name: 'Mouse', category: 'Accessories', total: 35 },
-  { id: 'AC-EX', name: 'Extension Cord', category: 'Accessories', total: 15 },
+
+  // --- Services ---
   { id: 'SV-3D', name: '3D Printing', category: 'Services', total: 1, isLocked: true }
 ];
 
