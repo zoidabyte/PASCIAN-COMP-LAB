@@ -276,8 +276,8 @@ export default function App() {
   // --- DYNAMIC THEMING ---
   const theme = {
     base: isDarkMode ? 'bg-[#0a0f1c] text-slate-200' : 'bg-slate-50 text-slate-800',
-    card: isDarkMode ? 'bg-slate-900/60 border-slate-700/50 text-slate-200 shadow-black/50' : 'bg-white/60 border-slate-200/50 text-slate-800 shadow-slate-200/50',
-    input: isDarkMode ? 'bg-slate-800/80 border-slate-600 text-white focus:border-indigo-500' : 'bg-white/80 border-slate-300 text-slate-900 focus:border-indigo-500',
+    card: isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-200 shadow-black/50' : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50',
+    input: isDarkMode ? 'bg-slate-800 border-slate-600 text-white focus:border-indigo-500' : 'bg-white border-slate-300 text-slate-900 focus:border-indigo-500',
     textMain: isDarkMode ? 'text-white' : 'text-slate-900',
     textMuted: isDarkMode ? 'text-slate-400' : 'text-slate-500',
     border: isDarkMode ? 'border-slate-700/50' : 'border-slate-200/50',
@@ -290,13 +290,13 @@ export default function App() {
       ? 'bg-slate-800/90 text-slate-400 border border-slate-700 shadow-lg hover:bg-slate-700 hover:text-white hover:shadow-indigo-500/20' 
       : 'bg-white/90 text-slate-600 border border-slate-200 shadow-lg hover:bg-slate-50 hover:text-indigo-600 hover:shadow-indigo-500/10',
     
-    // NEW: Styles for the housing/cards of the inventory items
+    // UPDATED: SOLID background styles for housing instead of glassmorphism blur
     inventoryCard: isDarkMode 
-      ? 'bg-slate-800/40 border border-slate-700/50 text-slate-200 shadow-lg shadow-black/20 backdrop-blur-xl' 
-      : 'bg-white/60 border border-white/80 text-slate-800 shadow-xl shadow-slate-200/40 backdrop-blur-xl',
+      ? 'bg-slate-900 border border-slate-800 text-slate-200 shadow-lg shadow-black/30' 
+      : 'bg-white border border-slate-200 text-slate-800 shadow-lg shadow-slate-100/80',
     inventoryCardHover: isDarkMode
-      ? 'hover:-translate-y-1.5 hover:shadow-[0_10px_40px_rgba(79,70,229,0.25)] hover:border-indigo-500/50 hover:bg-slate-800/70 z-10'
-      : 'hover:-translate-y-1.5 hover:shadow-[0_10px_40px_rgba(79,70,229,0.2)] hover:border-indigo-400 hover:bg-white/90 z-10',
+      ? 'hover:-translate-y-1.5 hover:shadow-[0_12px_40px_rgba(79,70,229,0.25)] hover:border-indigo-500 hover:bg-slate-800/90 z-10'
+      : 'hover:-translate-y-1.5 hover:shadow-[0_12px_40px_rgba(79,70,229,0.15)] hover:border-indigo-400 hover:bg-slate-50 z-10',
   };
 
   return (
@@ -335,7 +335,7 @@ export default function App() {
 
             <div className="max-h-[30vh] overflow-y-auto pr-2 space-y-3 mb-6">
               {cart.map((cartItem) => (
-                <div key={cartItem.id} className={`flex justify-between items-center p-3 rounded-xl border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                <div key={cartItem.id} className={`flex justify-between items-center p-3 rounded-xl border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                   <span className={`text-sm font-bold truncate pr-2 ${theme.textMain}`}>{cartItem.name}</span>
                   <div className="flex items-center gap-2 shrink-0">
                     <button type="button" onClick={() => handleUpdateCartQuantity(cartItem.id, -1)} className={`h-8 w-8 rounded-lg text-lg font-black flex items-center justify-center active:scale-95 ${isDarkMode ? 'bg-slate-700 text-white' : 'bg-white border'}`}>-</button>
@@ -464,7 +464,7 @@ export default function App() {
               <div className={`${theme.card} flex-1 rounded-3xl border backdrop-blur-xl p-6 md:p-8 transition-colors duration-500 space-y-10 animate-in fade-in`}>
                 <div className="space-y-4 max-w-2xl">
                   <h3 className={`text-xl font-bold border-b pb-3 font-mono ${theme.border}`}>Global Access</h3>
-                  <div className={`flex items-center justify-between p-5 rounded-2xl border transition-colors ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white/80 border-slate-200'}`}>
+                  <div className={`flex items-center justify-between p-5 rounded-2xl border transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                     <div>
                       <p className={`font-bold text-lg ${theme.textMain}`}>Maintenance Mode</p>
                       <p className={`text-sm ${theme.textMuted}`}>Locks the student QR catalog immediately.</p>
@@ -477,7 +477,7 @@ export default function App() {
 
                 <div className="space-y-4 max-w-2xl">
                   <h3 className={`text-xl font-bold border-b pb-3 font-mono ${theme.border}`}>Display</h3>
-                  <div className={`flex items-center justify-between p-5 rounded-2xl border transition-colors ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white/80 border-slate-200'}`}>
+                  <div className={`flex items-center justify-between p-5 rounded-2xl border transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                     <div>
                       <p className={`font-bold text-lg ${theme.textMain}`}>Interface Theme</p>
                       <p className={`text-sm ${theme.textMuted}`}>Toggle dark mode rendering for the terminal.</p>
@@ -531,7 +531,7 @@ export default function App() {
                       ))}
                     </div>
 
-                    {/* REDESIGNED INVENTORY CARDS */}
+                    {/* INVENTORY CARDS WITH SOLID HOUSING */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 px-2 pb-8">
                       {filteredInventory.map((item) => {
                         const isAvailable = item.category === 'Services' ? !item.isLocked : item.available > 0;
@@ -554,7 +554,7 @@ export default function App() {
 
                             <div className="relative z-10">
                               <div className="flex justify-between items-start mb-4">
-                                <span className={`text-xs font-mono px-2.5 py-1 rounded-lg border font-bold ${isDarkMode ? 'bg-slate-900/80 border-slate-700/50 text-slate-300' : 'bg-white/80 border-slate-200 text-slate-600'}`}>
+                                <span className={`text-xs font-mono px-2.5 py-1 rounded-lg border font-bold ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
                                   {item.id}
                                 </span>
                                 {item.isLocked ? (
@@ -569,7 +569,7 @@ export default function App() {
                             </div>
                             
                             {!item.isLocked && item.category !== 'Services' && (
-                               <div className={`mt-6 pt-4 border-t flex items-center justify-between text-sm relative z-10 ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
+                               <div className={`mt-6 pt-4 border-t flex items-center justify-between text-sm relative z-10 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
                                 <span className={`font-bold ${theme.textMuted}`}>In Stock</span>
                                 <div className="flex items-baseline gap-1">
                                   <span className="font-mono font-black text-xl text-indigo-500">{item.available}</span>
@@ -592,7 +592,7 @@ export default function App() {
                <div className={`${theme.card} border rounded-2xl overflow-hidden backdrop-blur-xl shadow-lg overflow-x-auto`}>
                  <table className="w-full text-left border-collapse min-w-[800px]">
                    <thead>
-                     <tr className={isDarkMode ? 'bg-slate-800/80 text-slate-300' : 'bg-slate-100 text-slate-700'}>
+                     <tr className={isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}>
                        <th className="p-4 font-bold text-sm uppercase">Date/Time</th>
                        <th className="p-4 font-bold text-sm uppercase">Student Info</th>
                        <th className="p-4 font-bold text-sm uppercase">Purpose</th>
@@ -652,7 +652,7 @@ export default function App() {
                 <div className={`${theme.card} border rounded-2xl overflow-hidden backdrop-blur-xl shadow-lg overflow-x-auto`}>
                   <table className="w-full text-left border-collapse min-w-[800px]">
                     <thead>
-                      <tr className={isDarkMode ? 'bg-slate-800/80 text-slate-300' : 'bg-slate-100 text-slate-700'}>
+                      <tr className={isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}>
                         <th className="p-4 font-bold text-sm uppercase">Date/Time</th>
                         <th className="p-4 font-bold text-sm uppercase">Student Info</th>
                         <th className="p-4 font-bold text-sm uppercase">Requested Items</th>
