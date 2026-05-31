@@ -400,14 +400,12 @@ export default function App() {
         </div>
       )}
 
-      {/* MAIN APP LAYOUT */}
       <div className="relative z-10 flex h-screen w-full backdrop-blur-[2px]">
         
-        {/* Sidebar Navigation */}
         <aside className={`w-64 border-r flex flex-col transition-colors duration-500 backdrop-blur-xl ${isDarkMode ? 'bg-slate-900/70 border-slate-800' : 'bg-white/70 border-slate-200'}`}>
           <div className="p-6 border-b border-inherit">
             <h1 className="text-2xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-cyan-500 drop-shadow-sm leading-tight">
-              Pascian<br/>Robotics Hub
+              Pascian<br/>TLE-ICT Department 
             </h1>
             <p className="text-xs uppercase tracking-widest mt-2 opacity-60 font-mono font-bold">System Terminal</p>
           </div>
