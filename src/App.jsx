@@ -36,10 +36,8 @@ const INITIAL_INVENTORY = [
   { id: 'EQ-TB', name: 'Tablet', category: 'Equipment', total: 160 },
   { id: 'EQ-MN', name: 'Monitor', category: 'Equipment', total: 25 },
   { id: 'EQ-TV', name: 'TV', category: 'Equipment', total: 5 },
-  { id: 'EQ-PR', name: 'Printer', category: 'Equipment', total: 5 },
   { id: 'EQ-RB', name: 'Robotics Kit', category: 'Equipment', total: 30 },
   { id: 'EQ-RT', name: 'Router', category: 'Equipment', total: 10 },
-  { id: 'EQ-HS', name: 'Headset', category: 'Equipment', total: 20 },
   { id: 'EQ-UP', name: 'UPS', category: 'Equipment', total: 10 },
 
   // --- Tools ---
@@ -55,6 +53,7 @@ const INITIAL_INVENTORY = [
   { id: 'AC-KB', name: 'Keyboard', category: 'Accessories', total: 30 },
   { id: 'AC-MS', name: 'Mouse', category: 'Accessories', total: 35 },
   { id: 'AC-EX', name: 'Extension Cord', category: 'Accessories', total: 15 },
+  { id: 'EQ-HS', name: 'Headset', category: 'Accesories', total: 20 },
   { id: 'AC-HD', name: 'External Hard Drive', category: 'Accessories', total: 10 },
 
   // --- Hidden/Child Items ---
@@ -64,6 +63,7 @@ const INITIAL_INVENTORY = [
   { id: 'TL-SD-HX', name: 'Hex Screwdriver', category: 'Tools', total: 5, hidden: true },
 
   // --- Services ---
+  { id: 'EQ-PR', name: '2D Printer', category: 'Services', total: 1000 },
   { id: 'SV-3D', name: '3D Printing', category: 'Services', total: 1, isLocked: true }
 ];
 
