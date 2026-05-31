@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 // --- Firebase Imports ---
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, setDoc } from 'firebase/firestore';
-import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth'; 
+import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -94,7 +94,6 @@ export default function App() {
   const [isSDModalOpen, setIsSDModalOpen] = useState(false);
   const [sdCounts, setSdCounts] = useState({ 'TL-SD-PH': 0, 'TL-SD-FL': 0, 'TL-SD-TX': 0, 'TL-SD-HX': 0 });
   const [studentForm, setStudentForm] = useState({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '', borrowDate: '' });
-
 
   // --- AUTH STATES ---
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
@@ -196,8 +195,6 @@ export default function App() {
     setBaseInventory(prev => prev.map(item => item.id === id ? { ...item, total: Number(newTotal) } : item));
   };
 
-
-
   // -- CART FUNCTIONS --
   const handleAddToCart = (item) => {
     if (!isLockedToStudent || isMaintenanceMode) return;
@@ -254,7 +251,8 @@ export default function App() {
       setShowSuccessScreen(true);
       setStudentForm({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '', borrowDate: '' });
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err) { alert("Error logging request to database. Please try again."); }
+    } catch (err) { alert("Error logging request to database. Please try again.");
+    }
   };
 
   // ADMIN STATUS FUNCTIONS
@@ -295,6 +293,14 @@ export default function App() {
     border: isDarkMode ? 'border-slate-700/50' : 'border-slate-200/50',
     tabActive: isDarkMode ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-white text-indigo-600 border border-indigo-200 shadow-sm',
     tabInactive: isDarkMode ? 'text-slate-400 hover:bg-slate-800/50' : 'text-slate-600 hover:bg-white/50',
+    
+    // NEW: Styles specifically for floating category buttons
+    categoryActive: isDarkMode 
+      ? 'bg-indigo-600 text-white shadow-[0_6px_20px_rgba(79,70,229,0.4)] border border-indigo-500' 
+      : 'bg-indigo-600 text-white shadow-[0_6px_20px_rgba(79,70,229,0.4)] border border-indigo-500',
+    categoryInactive: isDarkMode 
+      ? 'bg-slate-800/90 text-slate-400 border border-slate-700 shadow-lg hover:bg-slate-700 hover:text-white hover:shadow-indigo-500/20' 
+      : 'bg-white/90 text-slate-600 border border-slate-200 shadow-lg hover:bg-slate-50 hover:text-indigo-600 hover:shadow-indigo-500/10',
   };
 
   return (
@@ -378,7 +384,7 @@ export default function App() {
           <div className={`${theme.card} rounded-2xl p-6 w-full max-w-md shadow-2xl border backdrop-blur-xl`}>
             <h3 className={`font-black ${theme.textMain} text-xl mb-4`}>Select Screwdrivers</h3>
             <div className="space-y-4">
-               {['TL-SD-PH', 'TL-SD-FL', 'TL-SD-TX', 'TL-SD-HX'].map(id => {
+              {['TL-SD-PH', 'TL-SD-FL', 'TL-SD-TX', 'TL-SD-HX'].map(id => {
                 const item = inventory.find(i => i.id === id);
                 return (
                   <div key={id} className={`flex justify-between items-center py-2 border-b ${theme.border}`}>
@@ -475,8 +481,6 @@ export default function App() {
                   </div>
                 </div>
 
-
-                
                 {/* Visual Settings */}
                 <div className="space-y-4 max-w-2xl">
                   <h3 className={`text-xl font-bold border-b pb-3 font-mono ${theme.border}`}>Display</h3>
@@ -519,12 +523,19 @@ export default function App() {
                     </div>
                     <h2 className={`text-4xl font-black ${theme.textMain}`}>Hub is Closed</h2>
                     <p className={`text-lg max-w-md ${theme.textMuted}`}>We are currently doing maintenance or inventory checks. Please check back later to borrow equipment.</p>
-                  </div>
+                   </div>
                 ) : (
                   <>
-                    <div className={`flex p-1.5 rounded-2xl w-full shadow-inner overflow-x-auto gap-1 ${isDarkMode ? 'bg-slate-900/60' : 'bg-slate-200/60'}`}>
+                    {/* FLOATING CATEGORY BUTTONS */}
+                    <div className="flex w-full overflow-x-auto gap-3 pb-4 pt-2 px-2">
                       {['Equipment', 'Tools', 'Accessories', 'Services'].map((tab) => (
-                        <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap flex-1 text-center active:scale-95 ${activeTab === tab ? theme.tabActive : theme.tabInactive}`}>{tab}</button>
+                        <button 
+                          key={tab} 
+                          onClick={() => setActiveTab(tab)} 
+                          className={`px-6 py-3.5 rounded-full text-sm font-black transition-all duration-300 whitespace-nowrap flex-1 text-center hover:-translate-y-1 active:translate-y-0 ${activeTab === tab ? theme.categoryActive : theme.categoryInactive}`}
+                        >
+                          {tab}
+                        </button>
                       ))}
                     </div>
 
@@ -547,7 +558,7 @@ export default function App() {
                               <h4 className={`font-bold text-lg leading-tight mt-1 ${theme.textMain}`}>{item.name}</h4>
                             </div>
                             {!item.isLocked && item.category !== 'Services' && (
-                              <div className="mt-4 flex items-center justify-between text-sm">
+                               <div className="mt-4 flex items-center justify-between text-sm">
                                 <span className={theme.textMuted}>Stock:</span>
                                 <span className="font-mono font-bold text-indigo-500">{item.available} / {item.total}</span>
                               </div>
@@ -638,7 +649,7 @@ export default function App() {
                       {requests.filter(r => r.status === 'Returned' || r.status === 'Rejected').map(req => (
                         <tr key={req.id} className="hover:bg-black/5 transition-colors opacity-70 hover:opacity-100">
                           <td className={`p-4 ${theme.textMuted}`}>
-                            <div className="text-sm font-medium">{new Date(req.timestamp).toLocaleDateString()}</div>
+                             <div className="text-sm font-medium">{new Date(req.timestamp).toLocaleDateString()}</div>
                           </td>
                           <td className="p-4">
                             <div className={`font-bold ${theme.textMain}`}>{req.studentName}</div>
@@ -669,7 +680,7 @@ export default function App() {
         {/* FLOATING CHECKOUT BUTTON FOR STUDENTS */}
         {cart.length > 0 && currentView === 'student' && !isMaintenanceMode && (
           <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300">
-            <button onClick={() => setIsCheckoutModalOpen(true)} className="flex items-center gap-4 bg-indigo-600 text-white px-8 py-4 rounded-full font-black text-lg shadow-2xl shadow-indigo-500/40 hover:-translate-y-1 hover:shadow-indigo-500/60 active:scale-95 transition-all">
+             <button onClick={() => setIsCheckoutModalOpen(true)} className="flex items-center gap-4 bg-indigo-600 text-white px-8 py-4 rounded-full font-black text-lg shadow-2xl shadow-indigo-500/40 hover:-translate-y-1 hover:shadow-indigo-500/60 active:scale-95 transition-all">
               <span className="bg-white/20 text-white w-8 h-8 rounded-full flex items-center justify-center font-mono">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>
               Proceed to Checkout
               <svg className="w-6 h-6 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
