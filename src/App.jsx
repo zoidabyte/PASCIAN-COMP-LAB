@@ -324,8 +324,8 @@ export default function App() {
 
       {/* --- CHECKOUT MODAL --- */}
       {isCheckoutModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-          <div className={`${theme.card} rounded-3xl p-6 md:p-8 w-full max-w-lg shadow-2xl border backdrop-blur-xl my-8`}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 overflow-y-auto">
+          <div className={`${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'} rounded-3xl p-6 md:p-8 w-full max-w-lg shadow-2xl border my-8`}>
             <div className="flex justify-between items-center mb-6">
               <h3 className={`font-black ${theme.textMain} text-2xl`}>Finalize Request</h3>
               <button onClick={() => setIsCheckoutModalOpen(false)} className="text-slate-400 hover:text-red-500 font-bold text-2xl">&times;</button>
