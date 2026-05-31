@@ -71,6 +71,7 @@ export default function App() {
   // --- APP STATES ---
   const [currentView, setCurrentView] = useState('student');
   const [isLockedToStudent, setIsLockedToStudent] = useState(false);
+  const [adminTab, setAdminTab] = useState('Pending'); 
   const [inventory, setInventory] = useState(INITIAL_INVENTORY);
   const [requests, setRequests] = useState([]);
   const [activeTab, setActiveTab] = useState('Tools');
@@ -96,7 +97,7 @@ export default function App() {
     } else {
       setCurrentView('admin');
       setIsLockedToStudent(false);
-      setUiTab('Admin Login'); // Default to login screen for admins
+      setUiTab('Admin Login'); 
     }
   }, []);
 
@@ -139,7 +140,7 @@ export default function App() {
       await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
       setIsAdminUnlocked(true);
       setAdminPassword(''); 
-      setUiTab('Borrowed'); // Auto-route to Borrowed dashboard
+      setUiTab('Borrowed'); 
     } catch (error) {
       setLoginError("Invalid Email or Password. Access Denied.");
       setAdminPassword('');
@@ -172,6 +173,8 @@ export default function App() {
   };
 
   const handleAddToCart = (item) => {
+    if (!isLockedToStudent) return; 
+
     if (item.isScrewdriverTrigger) {
       setIsSDModalOpen(true);
       return;
@@ -366,7 +369,6 @@ export default function App() {
             <header className="flex justify-between items-center">
               <h2 className={`text-3xl font-black tracking-tight flex items-center gap-3 font-mono ${theme.textMain}`}>
                 <span className="opacity-40">&gt;</span> {uiTab}
-                {isAdminUnlocked && currentView === 'admin' && <span className="text-sm font-sans bg-emerald-500/20 text-emerald-500 px-3 py-1 rounded-full ml-2">Unlocked</span>}
               </h2>
               {isAdminUnlocked && currentView === 'admin' && (
                 <button onClick={handleAdminLogout} className="text-sm font-bold text-red-500 hover:text-red-600 bg-red-500/10 px-4 py-2 rounded-lg transition-colors">
@@ -444,14 +446,6 @@ export default function App() {
                       </div>
                     </div>
                     <button onClick={() => setShowSuccessScreen(false)} className="w-full sm:w-auto text-emerald-600 text-sm font-black bg-white/10 hover:bg-white/20 px-6 py-3.5 rounded-xl border border-emerald-500/30 active:scale-95 transition-transform">Dismiss Info</button>
-                  </div>
-                )}
-
-                {/* Show Admin Read-Only Notice if accessed from Admin Panel */}
-                {!isLockedToStudent && isAdminUnlocked && (
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-blue-500 text-sm font-bold flex items-center gap-3">
-                    <span className="text-xl">ℹ️</span> 
-                    Admin Visual Catalog: This inventory view is Read-Only. Borrowing requires the student QR Portal link.
                   </div>
                 )}
 
@@ -553,12 +547,13 @@ export default function App() {
             {/* VIEW 4: BORROWED (ADMIN ONLY) */}
             {uiTab === 'Borrowed' && currentView === 'admin' && isAdminUnlocked && (
               <div className="space-y-6 animate-in fade-in duration-300">
-                <div className={`${theme.card} border rounded-2xl overflow-hidden backdrop-blur-xl shadow-lg`}>
-                  <table className="w-full text-left border-collapse">
+                <div className={`${theme.card} border rounded-2xl overflow-hidden backdrop-blur-xl shadow-lg overflow-x-auto`}>
+                  <table className="w-full text-left border-collapse min-w-[800px]">
                     <thead>
                       <tr className={isDarkMode ? 'bg-slate-800/80 text-slate-300' : 'bg-slate-100 text-slate-700'}>
                         <th className="p-4 font-bold text-sm uppercase">Date/Time</th>
                         <th className="p-4 font-bold text-sm uppercase">Student Info</th>
+                        <th className="p-4 font-bold text-sm uppercase">Purpose</th>
                         <th className="p-4 font-bold text-sm uppercase">Requested Items</th>
                         <th className="p-4 font-bold text-sm uppercase">Status</th>
                         <th className="p-4 font-bold text-sm uppercase text-right">Actions</th>
@@ -574,6 +569,11 @@ export default function App() {
                           <td className="p-4">
                             <div className={`font-bold ${theme.textMain}`}>{req.studentName}</div>
                             <div className={`text-xs ${theme.textMuted}`}>{req.gradeLevel} - {req.gradeSection}</div>
+                          </td>
+                          <td className="p-4">
+                            <div className={`text-sm font-medium ${theme.textMain} max-w-[200px] whitespace-normal leading-tight opacity-90`}>
+                              {req.purpose || 'N/A'}
+                            </div>
                           </td>
                           <td className="p-4">
                             <ul className="space-y-1">
@@ -615,12 +615,13 @@ export default function App() {
             {uiTab === 'History' && currentView === 'admin' && isAdminUnlocked && (
               <div className="space-y-6 animate-in fade-in duration-300">
                 <h3 className={`text-xl font-bold border-b pb-2 ${theme.textMain} ${theme.border}`}>Archived Records</h3>
-                <div className={`${theme.card} border rounded-2xl overflow-hidden backdrop-blur-xl shadow-lg`}>
-                  <table className="w-full text-left border-collapse">
+                <div className={`${theme.card} border rounded-2xl overflow-hidden backdrop-blur-xl shadow-lg overflow-x-auto`}>
+                  <table className="w-full text-left border-collapse min-w-[800px]">
                     <thead>
                       <tr className={isDarkMode ? 'bg-slate-800/80 text-slate-300' : 'bg-slate-100 text-slate-700'}>
                         <th className="p-4 font-bold text-sm uppercase">Date/Time</th>
                         <th className="p-4 font-bold text-sm uppercase">Student Info</th>
+                        <th className="p-4 font-bold text-sm uppercase">Purpose</th>
                         <th className="p-4 font-bold text-sm uppercase">Requested Items</th>
                         <th className="p-4 font-bold text-sm uppercase text-right">Final Status</th>
                       </tr>
@@ -635,6 +636,11 @@ export default function App() {
                           <td className="p-4">
                             <div className={`font-bold ${theme.textMain}`}>{req.studentName}</div>
                             <div className={`text-xs ${theme.textMuted}`}>{req.gradeLevel} - {req.gradeSection}</div>
+                          </td>
+                          <td className="p-4">
+                            <div className={`text-sm font-medium ${theme.textMain} max-w-[200px] whitespace-normal leading-tight opacity-90`}>
+                              {req.purpose || 'N/A'}
+                            </div>
                           </td>
                           <td className="p-4">
                             <ul className="space-y-1">
