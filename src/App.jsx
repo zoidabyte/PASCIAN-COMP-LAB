@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+
 // --- Firebase Imports ---
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth'; 
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -14,11 +16,11 @@ const firebaseConfig = {
   measurementId: "G-DNX5ZLLS21"
 };
 
-// Initialize Firebase & Firestore
+// Initialize Firebase, Firestore, & Auth
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app); // INITIALIZE AUTH
 
-// --- Static Data Structures ---
 const GRADE_SECTIONS = {
   'Grade 7': ['Archimedes', 'Edison', 'Galileo', 'Newton'],
   'Grade 8': ['Aristotle', 'Darwin', 'Mendel', 'Linnaeus'],
@@ -66,20 +68,24 @@ export default function App() {
   const [uiTab, setUiTab] = useState('Inventory');
   const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // --- ORIGINAL STATES ---
+  // --- APP STATES ---
   const [currentView, setCurrentView] = useState('student');
   const [isLockedToStudent, setIsLockedToStudent] = useState(false);
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
-  const [pinInput, setPinInput] = useState('');
-  const ADMIN_PASSCODE = "0029";
+  const [adminTab, setAdminTab] = useState('Pending'); 
   const [inventory, setInventory] = useState(INITIAL_INVENTORY);
   const [requests, setRequests] = useState([]);
-  const [activeTab, setActiveTab] = useState('Tools');
+  const [activeTab, setActiveTab] = useState('Tools'); 
   const [cart, setCart] = useState([]); 
   const [showSuccessScreen, setShowSuccessScreen] = useState(false);
   const [isSDModalOpen, setIsSDModalOpen] = useState(false);
   const [sdCounts, setSdCounts] = useState({ 'TL-SD-PH': 0, 'TL-SD-FL': 0, 'TL-SD-TX': 0, 'TL-SD-HX': 0 });
   const [studentForm, setStudentForm] = useState({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '', borrowDate: '' });
+
+  // --- NEW AUTH STATES ---
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
+  const [adminEmail, setAdminEmail] = useState('adminroboticshub@gmail.com'); // Pre-filled for convenience
+  const [adminPassword, setAdminPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
 
   // --- EFFECTS ---
   useEffect(() => {
@@ -125,17 +131,6 @@ export default function App() {
   }, []);
 
   // --- FUNCTIONS ---
-  const handleAdminLogin = (e) => {
-    e.preventDefault();
-    if (pinInput === ADMIN_PASSCODE) {
-      setIsAdminUnlocked(true);
-      setPinInput('');
-    } else {
-      alert("Incorrect PIN. Access Denied.");
-      setPinInput('');
-    }
-  };
-
   const triggerEmailNotification = async (reqData, newStatus) => {
     try {
       await fetch('/api/send-email', {
@@ -152,6 +147,26 @@ export default function App() {
     } catch (err) {
       console.error("Failed to send email configuration callback:", err);
     }
+  };
+
+  // NEW FIREBASE LOGIN LOGIC
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+    try {
+      await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
+      setIsAdminUnlocked(true);
+      setAdminPassword(''); // Clear password field for security
+    } catch (error) {
+      setLoginError("Invalid Email or Password. Access Denied.");
+      setAdminPassword('');
+    }
+  };
+
+  // NEW LOGOUT LOGIC
+  const handleAdminLogout = async () => {
+    await signOut(auth);
+    setIsAdminUnlocked(false);
   };
 
   const handleAddToCart = (item) => {
@@ -205,8 +220,7 @@ export default function App() {
       setCart([]); setShowSuccessScreen(true);
       setStudentForm({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '', borrowDate: '' });
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err) { alert("Error logging request to database. Please try again.");
-    }
+    } catch (err) { alert("Error logging request to database. Please try again."); }
   };
 
   const handleApproveRequest = async (reqId) => {
@@ -214,7 +228,7 @@ export default function App() {
     try { 
       await updateDoc(doc(db, "requests", reqId), { status: 'Approved' }); 
       if (targetRequest) triggerEmailNotification(targetRequest, 'Approved');
-    } catch (err) { alert("Error updating request status."); }
+    } catch (err) { alert("Action Denied by Firebase: Ensure you are logged in as Admin."); }
   };
 
   const handleRejectRequest = async (reqId) => {
@@ -222,32 +236,29 @@ export default function App() {
     try { 
       await updateDoc(doc(db, "requests", reqId), { status: 'Rejected' }); 
       if (targetRequest) triggerEmailNotification(targetRequest, 'Rejected');
-    } catch (err) { alert("Error updating request status."); }
+    } catch (err) { alert("Action Denied by Firebase: Ensure you are logged in as Admin."); }
   };
 
   const handleReturnRequest = async (reqId) => {
-    try { await updateDoc(doc(db, "requests", reqId), { status: 'Returned' });
-    } 
-    catch (err) { alert("Error marking as returned."); }
+    try { await updateDoc(doc(db, "requests", reqId), { status: 'Returned' }); } 
+    catch (err) { alert("Action Denied by Firebase: Ensure you are logged in as Admin."); }
   };
 
   const filteredInventory = inventory.filter(item => item.category === activeTab && !item.hidden);
 
-  // --- UPDATED SIDEBAR ROUTING LOGIC ---
+  // --- NAVIGATION ---
   const navItems = isLockedToStudent 
     ? ['Inventory', 'Settings'] 
     : ['Inventory', 'Borrowed', 'History', 'Settings'];
 
   const handleNavClick = (item) => {
     setUiTab(item);
-    if (!isLockedToStudent && currentView === 'admin') {
-      setCurrentView('admin');
-    } else {
-      setCurrentView('student');
-    }
+    if (item === 'Inventory') setCurrentView('student');
+    if (item === 'Borrowed') { setCurrentView('admin'); setAdminTab('Pending'); }
+    if (item === 'History') { setCurrentView('admin'); setAdminTab('History'); }
   };
 
-  // --- DYNAMIC THEMING HELPERS ---
+  // --- THEMING ---
   const theme = {
     base: isDarkMode ? 'bg-[#0a0f1c] text-slate-200' : 'bg-slate-50 text-slate-800',
     card: isDarkMode ? 'bg-slate-900/60 border-slate-700/50 text-slate-200 shadow-black/50' : 'bg-white/60 border-slate-200/50 text-slate-800 shadow-slate-200/50',
@@ -262,7 +273,7 @@ export default function App() {
   return (
     <div className={`min-h-screen w-full relative transition-colors duration-500 overflow-hidden font-sans antialiased ${theme.base}`}>
       
-      {/* 1. ANIMATED 6K HIGH-TECH BACKGROUND */}
+      {/* BACKGROUND */}
       <div className="absolute inset-0 z-0 opacity-60">
         <style>
           {`
@@ -284,13 +295,13 @@ export default function App() {
         <div className={`absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full blur-[140px] pointer-events-none ${isDarkMode ? 'bg-emerald-900/20' : 'bg-cyan-400/20'}`}></div>
       </div>
 
-      {/* Screwdriver Modal */}
+      {/* SCREWDRIVER MODAL */}
       {isSDModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className={`${theme.card} rounded-2xl p-6 w-full max-w-md shadow-2xl border backdrop-blur-xl`}>
             <h3 className={`font-black ${theme.textMain} text-xl mb-4`}>Select Screwdrivers</h3>
             <div className="space-y-4">
-               {['TL-SD-PH', 'TL-SD-FL', 'TL-SD-TX', 'TL-SD-HX'].map(id => {
+              {['TL-SD-PH', 'TL-SD-FL', 'TL-SD-TX', 'TL-SD-HX'].map(id => {
                 const item = inventory.find(i => i.id === id);
                 return (
                   <div key={id} className={`flex justify-between items-center py-2 border-b ${theme.border}`}>
@@ -312,17 +323,18 @@ export default function App() {
         </div>
       )}
 
-      {/* 2. MAIN APP LAYOUT */}
+      {/* MAIN LAYOUT */}
       <div className="relative z-10 flex h-screen w-full backdrop-blur-[2px]">
         
-        {/* Sidebar Navigation */}
+        {/* SIDEBAR */}
         <aside className={`w-64 border-r flex flex-col transition-colors duration-500 backdrop-blur-xl ${isDarkMode ? 'bg-slate-900/70 border-slate-800' : 'bg-white/70 border-slate-200'}`}>
           <div className="p-6 border-b border-inherit">
-            <h1 className="text-2xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-cyan-500 drop-shadow-sm leading-tight">
-              Pascian<br/>Robotics Hub
+            <h1 className="text-2xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-cyan-500 drop-shadow-sm">
+              Robotics Hub
             </h1>
-            <p className="text-xs uppercase tracking-widest mt-2 opacity-60 font-mono font-bold">System Terminal</p>
+            <p className="text-xs uppercase tracking-widest mt-1 opacity-60 font-mono font-bold">System Terminal</p>
           </div>
+          
           <nav className="flex-1 p-4 space-y-2">
             {navItems.map((item) => (
               <button
@@ -337,37 +349,30 @@ export default function App() {
               </button>
             ))}
           </nav>
+
+          <div className="p-6 border-t border-inherit">
+             <div className="text-xs font-mono font-medium opacity-50 uppercase tracking-widest">
+               Developed by <span className="text-indigo-500 font-bold">@zoidabyte</span>
+             </div>
+          </div>
         </aside>
 
-        {/* 3. MAIN CONTENT AREA */}
+        {/* MAIN CONTENT */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <div className="max-w-7xl mx-auto h-full flex flex-col space-y-6">
             
-            {/* Dynamic Header */}
+            {/* HEADER */}
             <header className="flex justify-between items-center">
               <h2 className={`text-3xl font-black tracking-tight flex items-center gap-3 font-mono ${theme.textMain}`}>
-                <span className="opacity-40">&gt;</span> {uiTab}
+                <span className="opacity-40">&gt;</span> {uiTab} 
+                {isAdminUnlocked && currentView === 'admin' && <span className="text-sm font-sans bg-emerald-500/20 text-emerald-500 px-3 py-1 rounded-full ml-2">Unlocked</span>}
               </h2>
+              {isAdminUnlocked && currentView === 'admin' && (
+                <button onClick={handleAdminLogout} className="text-sm font-bold text-red-500 hover:text-red-600 bg-red-500/10 px-4 py-2 rounded-lg transition-colors">
+                  Lock Terminal 🔒
+                </button>
+              )}
             </header>
-
-            {/* ADMIN PIN SCREEN */}
-            {currentView === 'admin' && !isAdminUnlocked && (
-              <div className="flex flex-col items-center justify-center h-[60vh] animate-in fade-in zoom-in duration-300">
-                <div className={`${theme.card} p-10 rounded-3xl border backdrop-blur-xl shadow-2xl max-w-sm w-full text-center space-y-6`}>
-                  <div className="w-16 h-16 bg-indigo-500/10 text-indigo-500 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-indigo-500/20 shadow-inner">
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                  </div>
-                  <div>
-                    <h2 className={`text-2xl font-black ${theme.textMain}`}>Admin Terminal</h2>
-                    <p className={`text-sm mt-2 ${theme.textMuted}`}>Enter access code to proceed.</p>
-                  </div>
-                  <form onSubmit={handleAdminLogin} className="space-y-4">
-                    <input type="password" placeholder="••••" value={pinInput} onChange={(e) => setPinInput(e.target.value)} className={`w-full text-center tracking-[1em] text-2xl p-4 rounded-xl font-mono ${theme.input} shadow-inner outline-none transition-all`} autoFocus />
-                    <button type="submit" className="w-full bg-indigo-600 text-white font-black py-4 rounded-xl shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-1 active:scale-95 transition-all duration-300 uppercase tracking-widest text-sm">Authenticate</button>
-                  </form>
-                </div>
-              </div>
-            )}
 
             {/* VIEW 1: SETTINGS */}
             {uiTab === 'Settings' && (
@@ -379,7 +384,10 @@ export default function App() {
                       <p className={`font-bold text-lg ${theme.textMain}`}>Interface Theme</p>
                       <p className={`text-sm ${theme.textMuted}`}>Toggle dark mode rendering for the terminal.</p>
                     </div>
-                    <button onClick={() => setIsDarkMode(!isDarkMode)} className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors duration-300 ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+                    <button 
+                      onClick={() => setIsDarkMode(!isDarkMode)}
+                      className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors duration-300 ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                    >
                       <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition duration-300 shadow-md ${isDarkMode ? 'translate-x-9' : 'translate-x-1'}`} />
                     </button>
                   </div>
@@ -387,16 +395,16 @@ export default function App() {
               </div>
             )}
 
-            {/* VIEW 2: STUDENT CATALOG (STUDENT VIEW ONLY) */}
+            {/* VIEW 2: INVENTORY */}
             {uiTab === 'Inventory' && currentView === 'student' && (
-              <div className="space-y-8 animate-in fade-in duration-300">
+              <div className="space-y-6 animate-in fade-in duration-300">
                 {showSuccessScreen && (
                   <div className="bg-emerald-500/10 border border-emerald-500/30 backdrop-blur-md rounded-2xl p-5 flex flex-col sm:flex-row gap-4 justify-between items-center text-emerald-600 shadow-md">
                     <div className="flex items-center gap-4">
                       <div className="h-12 w-12 shrink-0 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black text-xl shadow-inner">✓</div>
                       <div>
                         <h4 className="font-black text-base text-emerald-500">Request Uploaded Successfully!</h4>
-                        <p className="text-sm opacity-80">Your layout transaction has updated the database pipeline.</p>
+                        <p className="text-sm opacity-80">Your transaction has updated the database pipeline.</p>
                       </div>
                     </div>
                     <button onClick={() => setShowSuccessScreen(false)} className="w-full sm:w-auto text-emerald-600 text-sm font-black bg-white/10 hover:bg-white/20 px-6 py-3.5 rounded-xl border border-emerald-500/30 active:scale-95 transition-transform">Dismiss Info</button>
@@ -417,264 +425,247 @@ export default function App() {
                         <div key={item.id} onClick={() => !item.isLocked && isAvailable && handleAddToCart(item)} className={`${theme.card} border p-5 rounded-2xl backdrop-blur-md transition-all flex flex-col justify-between min-h-[140px] ${item.isLocked ? 'opacity-40' : isAvailable ? 'cursor-pointer hover:border-indigo-500 active:scale-[0.99]' : 'opacity-50'}`}>
                           <div>
                             <div className="flex justify-between items-center mb-2">
-                              <span className={`text-xs font-mono px-2 py-1 rounded-md border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}>{item.id}</span>
-                              {item.isLocked ? (
-                                <span className="text-xs font-bold text-rose-500 bg-rose-500/10 px-2 py-1 rounded-md">Locked</span>
-                              ) : isAvailable ? (
-                                <span className="text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md">Available</span>
-                              ) : (
-                                <span className="text-xs font-bold text-orange-500 bg-orange-500/10 px-2 py-1 rounded-md">Out of Stock</span>
-                              )}
+                              <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded ${isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>{item.id}</span>
+                              <span className={`text-xs px-3 py-1 rounded-full font-black tracking-wide ${isAvailable ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}>
+                                {item.category === 'Services' ? (isAvailable ? 'Active' : 'Locked') : (isAvailable ? `${item.available} Units Available` : 'Out of Stock')}
+                              </span>
                             </div>
-                            <h4 className={`font-bold text-lg leading-tight mt-1 ${theme.textMain}`}>{item.name}</h4>
+                            <h3 className={`font-black mt-3 text-lg tracking-tight leading-tight ${theme.textMain}`}>{item.name}</h3>
                           </div>
-                          {!item.isLocked && item.category !== 'Services' && (
-                            <div className="mt-4 flex items-center justify-between text-sm">
-                              <span className={theme.textMuted}>Stock:</span>
-                              <span className="font-mono font-bold text-indigo-500">{item.available} / {item.total}</span>
+                          {isAvailable && (
+                            <div className={`mt-4 pt-3 border-t flex justify-between items-center ${theme.border}`}>
+                              <span className={`text-xs font-semibold ${theme.textMuted}`}>{item.isScrewdriverTrigger ? 'Tap to setup selection' : 'Tap to add to your bag'}</span>
+                              <span className="text-indigo-500 font-black text-xl bg-indigo-500/10 h-8 w-8 rounded-full flex items-center justify-center">+</span>
                             </div>
                           )}
                         </div>
-                      )
+                      );
                     })}
                   </div>
 
-                  <div className={`${theme.card} border rounded-3xl p-6 backdrop-blur-xl shadow-lg sticky top-6`}>
-                    <h3 className={`text-xl font-black mb-4 flex items-center gap-2 ${theme.textMain}`}>
-                      <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
-                      Request Cart
-                    </h3>
-                    
-                    {cart.length === 0 ? (
-                      <div className={`text-center py-12 rounded-2xl border border-dashed ${isDarkMode ? 'border-slate-700 text-slate-500' : 'border-slate-300 text-slate-400'}`}>
-                        <p className="font-medium text-sm">Cart is empty.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="max-h-[30vh] overflow-y-auto pr-2 space-y-2">
-                          {cart.map((item) => (
-                            <div key={item.id} className={`flex justify-between items-center p-3 rounded-xl border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-200'}`}>
-                              <div className="flex-1 truncate pr-2">
-                                <p className={`font-bold text-sm truncate ${theme.textMain}`}>{item.name}</p>
-                                <p className={`text-[10px] font-mono ${theme.textMuted}`}>{item.id}</p>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                {item.category !== 'Services' && (
-                                  <div className="flex items-center gap-2 bg-slate-500/10 rounded-lg p-1">
-                                    <button onClick={() => handleUpdateCartQuantity(item.id, -1)} className={`w-6 h-6 rounded-md flex items-center justify-center font-bold active:scale-95 ${isDarkMode ? 'bg-slate-700 text-white' : 'bg-white text-slate-800 shadow-sm'}`}>-</button>
-                                    <span className="font-mono font-bold text-sm w-4 text-center">{item.quantity}</span>
-                                    <button onClick={() => handleUpdateCartQuantity(item.id, 1)} className={`w-6 h-6 rounded-md flex items-center justify-center font-bold active:scale-95 ${isDarkMode ? 'bg-slate-700 text-white' : 'bg-white text-slate-800 shadow-sm'}`}>+</button>
-                                  </div>
-                                )}
-                                <button onClick={() => handleRemoveFromCart(item.id)} className="text-rose-500 hover:bg-rose-500/10 p-1.5 rounded-lg transition-colors"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
-                              </div>
+                  <div className="lg:col-span-1">
+                    <form onSubmit={handleBorrowSubmit} className={`${theme.card} border backdrop-blur-md rounded-3xl p-5 md:p-6 shadow-xl space-y-5 lg:sticky lg:top-24`}>
+                      <h3 className={`font-black text-xl border-b pb-3 flex items-center justify-between ${theme.textMain} ${theme.border}`}>
+                        <span>Selected Bag</span>
+                        <span className="bg-indigo-600 text-white font-mono text-xs px-2.5 py-1 rounded-full">{cart.reduce((sum, i) => sum + i.quantity, 0)} Items</span>
+                      </h3>
+                      
+                      <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                          {cart.length === 0 ? <p className={`text-base text-center py-8 font-medium ${theme.textMuted}`}>No items inside your cart yet.<br/>Tap anything from the catalog above to add.</p> : 
+                          cart.map((cartItem) => (
+                          <div key={cartItem.id} className={`flex justify-between items-center p-3 rounded-xl border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                            <span className={`text-base font-bold truncate pr-2 max-w-[150px] ${theme.textMain}`}>{cartItem.name}</span>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <button type="button" onClick={() => handleUpdateCartQuantity(cartItem.id, -1)} className={`h-9 w-9 rounded-lg text-lg font-black flex items-center justify-center shadow-sm active:scale-95 ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-white hover:bg-slate-100'}`}>-</button>
+                              <span className={`text-base font-mono font-black w-5 text-center ${theme.textMain}`}>{cartItem.quantity}</span>
+                              <button type="button" onClick={() => handleUpdateCartQuantity(cartItem.id, 1)} className={`h-9 w-9 rounded-lg text-lg font-black flex items-center justify-center shadow-sm active:scale-95 ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-white hover:bg-slate-100'}`}>+</button>
+                              <button type="button" onClick={() => handleRemoveFromCart(cartItem.id)} className="text-slate-400 hover:text-red-500 font-black text-2xl pl-1 active:scale-90 transition-transform">×</button>
                             </div>
-                          ))}
-                        </div>
-
-                        <form onSubmit={handleBorrowSubmit} className="space-y-3 pt-4 border-t border-slate-500/20">
-                          <input required type="text" placeholder="Student Name" value={studentForm.name} onChange={e => setStudentForm({...studentForm, name: e.target.value})} className={`w-full px-4 py-3 rounded-xl text-sm font-medium outline-none border transition-all ${theme.input}`} />
-                          <input required type="email" placeholder="Email Address" value={studentForm.email} onChange={e => setStudentForm({...studentForm, email: e.target.value})} className={`w-full px-4 py-3 rounded-xl text-sm font-medium outline-none border transition-all ${theme.input}`} />
-                          <div className="grid grid-cols-2 gap-3">
-                            <select required value={studentForm.gradeLevel} onChange={e => setStudentForm({...studentForm, gradeLevel: e.target.value, gradeSection: ''})} className={`w-full px-4 py-3 rounded-xl text-sm font-medium outline-none border transition-all ${theme.input}`}>
-                              <option value="">Grade Level</option>
-                              {Object.keys(GRADE_SECTIONS).map(grade => <option key={grade} value={grade}>{grade}</option>)}
-                            </select>
-                            <select required value={studentForm.gradeSection} onChange={e => setStudentForm({...studentForm, gradeSection: e.target.value})} disabled={!studentForm.gradeLevel} className={`w-full px-4 py-3 rounded-xl text-sm font-medium outline-none border transition-all disabled:opacity-50 ${theme.input}`}>
-                              <option value="">Section</option>
-                              {studentForm.gradeLevel && GRADE_SECTIONS[studentForm.gradeLevel].map(section => <option key={section} value={section}>{section}</option>)}
-                            </select>
-                          </div>
-                          <input required type="date" min={getMinBorrowDate()} value={studentForm.borrowDate} onChange={e => setStudentForm({...studentForm, borrowDate: e.target.value})} className={`w-full px-4 py-3 rounded-xl text-sm font-medium outline-none border transition-all ${theme.input}`} />
-                          <textarea required placeholder="Purpose / Experiment Name" value={studentForm.purpose} onChange={e => setStudentForm({...studentForm, purpose: e.target.value})} className={`w-full px-4 py-3 rounded-xl text-sm font-medium outline-none border transition-all resize-none h-24 ${theme.input}`} />
-                          <button type="submit" className="w-full bg-indigo-600 text-white font-black py-4 rounded-xl shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 active:scale-95 transition-all uppercase tracking-widest text-sm">Submit Request</button>
-                        </form>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* VIEW 3: LIVE INVENTORY TRACKER (ADMIN VIEW ONLY) */}
-            {uiTab === 'Inventory' && currentView === 'admin' && isAdminUnlocked && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <section className="space-y-6">
-                  
-                  {/* Centered Category Tabs */}
-                  <div className="flex justify-center">
-                    <div className={`flex p-1.5 rounded-2xl w-full max-w-2xl shadow-inner overflow-x-auto gap-1 ${isDarkMode ? 'bg-slate-900/60' : 'bg-slate-200/60'}`}>
-                      {['Equipment', 'Tools', 'Accessories', 'Services'].map((tab) => (
-                        <button 
-                          key={tab} 
-                          onClick={() => setActiveTab(tab)} 
-                          className={`px-5 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap flex-1 text-center active:scale-95 ${activeTab === tab ? theme.tabActive : theme.tabInactive}`}
-                        >
-                          {tab}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className={`${theme.card} border rounded-xl overflow-hidden shadow-sm overflow-x-auto backdrop-blur-md`}>
-                    <table className="w-full text-left border-collapse min-w-[800px]">
-                      <thead>
-                        <tr className={isDarkMode ? 'bg-slate-800/80 text-slate-300' : 'bg-slate-100 text-slate-700'}>
-                          <th className="p-4 font-bold text-sm uppercase tracking-wider">Item Details</th>
-                          <th className="p-4 font-bold text-sm uppercase tracking-wider text-center">Total Stock</th>
-                          <th className="p-4 font-bold text-sm uppercase tracking-wider text-center text-emerald-500">Available</th>
-                          <th className="p-4 font-bold text-sm uppercase tracking-wider text-center text-orange-500">Pending</th>
-                          <th className="p-4 font-bold text-sm uppercase tracking-wider text-center text-violet-500">Borrowed</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-inherit">
-                        {inventory
-                          .filter(i => i.category === activeTab && !i.hidden)
-                          .map(item => (
-                            <tr key={item.id} className="transition-colors hover:bg-black/5">
-                              <td className={`p-4 font-medium flex items-center gap-3 ${theme.textMain}`}>
-                                <span className={`text-[10px] font-mono px-2 py-1 rounded border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>{item.id}</span>
-                                {item.name}
-                              </td>
-                              <td className={`p-4 text-center ${theme.textMuted}`}>
-                                {item.category === 'Services' ? '-' : item.total}
-                              </td>
-                              <td className="p-4 text-center font-semibold text-emerald-500">
-                                {item.category === 'Services' ? '-' : item.available}
-                              </td>
-                              <td className="p-4 text-center font-medium text-orange-500">
-                                {item.pending}
-                              </td>
-                              <td className="p-4 text-center font-medium text-violet-500">
-                                {item.borrowed}
-                              </td>
-                            </tr>
+                            </div>
                         ))}
-                        {inventory.filter(i => i.category === activeTab && !i.hidden).length === 0 && (
-                          <tr>
-                            <td colSpan="5" className={`p-8 text-center text-sm font-medium ${theme.textMuted}`}>
-                              No items found in this category.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                      </div>
+
+                      <div className={`space-y-4 pt-2 border-t ${theme.border}`}>
+                        <div>
+                          <label className={`text-xs uppercase font-black ml-1 tracking-wide ${theme.textMuted}`}>Borrower Info</label>
+                          <input required type="text" placeholder="Full Name" value={studentForm.name} onChange={(e) => setStudentForm({...studentForm, name: e.target.value})} className={`w-full rounded-xl px-4 py-3.5 mt-1 text-base shadow-inner ${theme.input}`} />
+                        </div>
+                        <input required type="email" placeholder="School Email Address" value={studentForm.email} onChange={(e) => setStudentForm({...studentForm, email: e.target.value})} className={`w-full rounded-xl px-4 py-3.5 text-base shadow-inner ${theme.input}`} />
+                        <div className="grid grid-cols-2 gap-3">
+                          <select required value={studentForm.gradeLevel} onChange={(e) => setStudentForm({...studentForm, gradeLevel: e.target.value, gradeSection: ''})} className={`w-full rounded-xl px-3 py-3.5 text-base shadow-sm ${theme.input}`}>
+                            <option value="">Grade</option>
+                            {Object.keys(GRADE_SECTIONS).map(grade => <option key={grade} value={grade}>{grade}</option>)}
+                          </select>
+                          <select required disabled={!studentForm.gradeLevel} value={studentForm.gradeSection} onChange={(e) => setStudentForm({...studentForm, gradeSection: e.target.value})} className={`w-full rounded-xl px-3 py-3.5 text-base shadow-sm disabled:opacity-50 ${theme.input}`}>
+                            <option value="">Section</option>
+                            {studentForm.gradeLevel && GRADE_SECTIONS[studentForm.gradeLevel].map(sec => <option key={sec} value={sec}>{sec}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className={`text-xs uppercase font-black ml-1 tracking-wide ${theme.textMuted}`}>Target Collection Date</label>
+                          <input required type="date" min={getMinBorrowDate()} value={studentForm.borrowDate} onChange={(e) => setStudentForm({...studentForm, borrowDate: e.target.value})} className={`w-full rounded-xl px-4 py-3.5 text-base shadow-inner ${theme.input}`} />
+                        </div>
+                        <div>
+                          <label className={`text-xs uppercase font-black ml-1 tracking-wide ${theme.textMuted}`}>Activity Purpose</label>
+                          <textarea required rows="2" placeholder="e.g., Robotics competition project..." value={studentForm.purpose} onChange={(e) => setStudentForm({...studentForm, purpose: e.target.value})} className={`w-full rounded-xl px-4 py-3.5 mt-1 text-base shadow-inner ${theme.input}`}></textarea>
+                        </div>
+                        <button type="submit" className="w-full bg-indigo-600 text-white py-4 mt-2 rounded-xl text-base font-black tracking-wide shadow-lg shadow-indigo-500/30 hover:bg-indigo-500 active:scale-[0.98] transition-transform">Submit Request</button>
+                      </div>
+                    </form>
                   </div>
-                </section>
-              </div>
-            )}
-
-            {/* VIEW 4: BORROWED (ADMIN ONLY) */}
-            {uiTab === 'Borrowed' && currentView === 'admin' && isAdminUnlocked && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <div className={`${theme.card} border rounded-2xl overflow-hidden backdrop-blur-xl shadow-lg`}>
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className={isDarkMode ? 'bg-slate-800/80 text-slate-300' : 'bg-slate-100 text-slate-700'}>
-                        <th className="p-4 font-bold text-sm uppercase">Date/Time</th>
-                        <th className="p-4 font-bold text-sm uppercase">Student Info</th>
-                        <th className="p-4 font-bold text-sm uppercase">Requested Items</th>
-                        <th className="p-4 font-bold text-sm uppercase">Status</th>
-                        <th className="p-4 font-bold text-sm uppercase text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-inherit">
-                      {requests.filter(r => r.status === 'Pending' || r.status === 'Approved').map(req => (
-                        <tr key={req.id} className="hover:bg-black/5 transition-colors">
-                          <td className={`p-4 ${theme.textMuted}`}>
-                            <div className="text-sm font-medium">{new Date(req.timestamp).toLocaleDateString()}</div>
-                            <div className="text-xs font-mono mt-1 opacity-70">{new Date(req.timestamp).toLocaleTimeString()}</div>
-                          </td>
-                          <td className="p-4">
-                            <div className={`font-bold ${theme.textMain}`}>{req.studentName}</div>
-                            <div className={`text-xs ${theme.textMuted}`}>{req.gradeLevel} - {req.gradeSection}</div>
-                          </td>
-                          <td className="p-4">
-                            <ul className="space-y-1">
-                              {req.items.map((i, idx) => (
-                                <li key={idx} className={`text-sm ${theme.textMain}`}>
-                                  <span className="font-bold text-indigo-500 mr-2">{i.quantity}x</span>{i.itemName}
-                                </li>
-                              ))}
-                            </ul>
-                          </td>
-                          <td className="p-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                              req.status === 'Pending' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
-                              'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                            }`}>
-                              {req.status}
-                            </span>
-                          </td>
-                          <td className="p-4 text-right space-x-2">
-                            {req.status === 'Pending' && (
-                              <>
-                                <button onClick={() => handleApproveRequest(req.id)} className="bg-emerald-500 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-emerald-600 active:scale-95 transition-transform">Approve</button>
-                                <button onClick={() => handleRejectRequest(req.id)} className="bg-rose-500/10 text-rose-500 px-4 py-2 rounded-lg text-xs font-bold hover:bg-rose-500 hover:text-white active:scale-95 transition-all">Reject</button>
-                              </>
-                            )}
-                            {req.status === 'Approved' && (
-                              <button onClick={() => handleReturnRequest(req.id)} className="bg-indigo-500 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-indigo-600 active:scale-95 transition-transform">Mark Returned</button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
                 </div>
               </div>
             )}
 
-            {/* VIEW 5: HISTORY (ADMIN ONLY) */}
-            {uiTab === 'History' && currentView === 'admin' && isAdminUnlocked && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <h3 className={`text-xl font-bold border-b pb-2 ${theme.textMain} ${theme.border}`}>Archived Records</h3>
-                <div className={`${theme.card} border rounded-2xl overflow-hidden backdrop-blur-xl shadow-lg`}>
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className={isDarkMode ? 'bg-slate-800/80 text-slate-300' : 'bg-slate-100 text-slate-700'}>
-                        <th className="p-4 font-bold text-sm uppercase">Date/Time</th>
-                        <th className="p-4 font-bold text-sm uppercase">Student Info</th>
-                        <th className="p-4 font-bold text-sm uppercase">Requested Items</th>
-                        <th className="p-4 font-bold text-sm uppercase text-right">Final Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-inherit">
-                      {requests.filter(r => r.status === 'Returned' || r.status === 'Rejected').map(req => (
-                        <tr key={req.id} className="hover:bg-black/5 transition-colors opacity-70 hover:opacity-100">
-                          <td className={`p-4 ${theme.textMuted}`}>
-                            <div className="text-sm font-medium">{new Date(req.timestamp).toLocaleDateString()}</div>
-                            <div className="text-xs font-mono mt-1 opacity-70">{new Date(req.timestamp).toLocaleTimeString()}</div>
-                          </td>
-                          <td className="p-4">
-                            <div className={`font-bold ${theme.textMain}`}>{req.studentName}</div>
-                            <div className={`text-xs ${theme.textMuted}`}>{req.gradeLevel} - {req.gradeSection}</div>
-                          </td>
-                          <td className="p-4">
-                            <ul className="space-y-1">
-                              {req.items.map((i, idx) => (
-                                <li key={idx} className={`text-sm ${theme.textMain}`}>
-                                  <span className="font-bold text-indigo-500 mr-2">{i.quantity}x</span>{i.itemName}
-                                </li>
-                              ))}
-                            </ul>
-                          </td>
-                          <td className="p-4 text-right">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                              req.status === 'Returned' ? 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/20' :
-                              'bg-rose-500/10 text-rose-500 border border-rose-500/20'
-                            }`}>
-                              {req.status}
+            {/* VIEW 3: ADMIN PORTAL */}
+            {(uiTab === 'Borrowed' || uiTab === 'History') && currentView === 'admin' && (
+              <div className="animate-in fade-in duration-300">
+                {!isAdminUnlocked ? (
+                  <div className={`${theme.card} max-w-sm mx-auto mt-20 p-8 rounded-3xl shadow-xl border text-center backdrop-blur-xl`}>
+                    <div className="h-16 w-16 bg-indigo-500/20 text-indigo-500 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl">🔒</div>
+                    <h2 className={`text-xl font-black mb-2 ${theme.textMain}`}>Admin Gateway</h2>
+                    <p className={`text-sm mb-6 ${theme.textMuted}`}>Database authorization required.</p>
+                    
+                    {loginError && <p className="text-red-500 text-sm font-bold mb-4">{loginError}</p>}
+                    
+                    <form onSubmit={handleAdminLogin} className="space-y-4">
+                      {/* Email input pre-filled for convenience */}
+                      <input 
+                        type="email" 
+                        value={adminEmail} 
+                        onChange={(e) => setAdminEmail(e.target.value)} 
+                        className={`w-full text-center text-sm font-mono rounded-xl px-4 py-3 opacity-60 ${theme.input}`}
+                        readOnly // Optional: Remove readOnly if you ever want to change it on the fly
+                      />
+                      <input 
+                        type="password" 
+                        value={adminPassword} 
+                        onChange={(e) => setAdminPassword(e.target.value)} 
+                        placeholder="Enter Password" 
+                        className={`w-full text-center tracking-widest text-xl font-mono rounded-xl px-4 py-4 ${theme.input}`}
+                        autoFocus
+                      />
+                      <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-xl font-black shadow-md shadow-indigo-500/30 hover:bg-indigo-500 active:scale-95 transition-all">Verify Credentials</button>
+                    </form>
+                  </div>
+                ) : (
+                  <div className="space-y-8">
+                    
+                    {/* Admin Specific Tabs */}
+                    <section className="space-y-4">
+                      <div className={`flex p-1.5 rounded-2xl w-full sm:w-fit shadow-inner ${isDarkMode ? 'bg-slate-900/60' : 'bg-slate-200/60'}`}>
+                        {['Pending', 'Approved', 'History'].map((tab) => (
+                          <button 
+                            key={tab} 
+                            onClick={() => setAdminTab(tab)} 
+                            className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all flex-1 text-center sm:flex-none ${adminTab === tab ? theme.tabActive : theme.tabInactive}`}
+                          >
+                            {tab === 'Approved' ? 'Active Borrows' : tab}
+                            <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-500'}`}>
+                              {requests.filter(r => tab === 'History' ? (r.status === 'Returned' || r.status === 'Rejected') : r.status === tab).length}
                             </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Main Requests Table */}
+                      <div className={`${theme.card} border rounded-2xl overflow-hidden shadow-sm overflow-x-auto backdrop-blur-md`}>
+                        <table className="w-full text-left text-base whitespace-nowrap">
+                          <thead>
+                            <tr className={`text-xs uppercase tracking-wider ${isDarkMode ? 'bg-slate-800/80 text-slate-400' : 'bg-slate-50 text-slate-500'}`}>
+                              <th className="px-5 py-4 font-bold">Student</th>
+                              <th className="px-5 py-4 font-bold">Date Needed</th>
+                              <th className="px-5 py-4 font-bold">Items</th>
+                              <th className="px-5 py-4 text-right font-bold">Actions / Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700/50' : 'divide-slate-100'}`}>
+                            {(() => {
+                              const visibleRequests = requests.filter(r => adminTab === 'History' ? (r.status === 'Returned' || r.status === 'Rejected') : r.status === adminTab);
+                              if (visibleRequests.length === 0) {
+                                return <tr><td colSpan="4" className={`p-8 text-center ${theme.textMuted}`}>No {adminTab.toLowerCase()} requests right now.</td></tr>;
+                              }
+                              return visibleRequests.map(req => (
+                                <tr key={req.id} className={isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}>
+                                  <td className="px-5 py-4">
+                                    <span className={`block font-bold ${theme.textMain}`}>{req.studentName}</span>
+                                    <span className={`block text-sm font-mono ${theme.textMuted}`}>{req.gradeLevel} - {req.gradeSection}</span>
+                                  </td>
+                                  <td className="px-5 py-4">
+                                    <span className="block font-bold text-indigo-500">
+                                      {req.borrowDate ? new Date(req.borrowDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'N/A'}
+                                    </span>
+                                  </td>
+                                  <td className="px-5 py-4">
+                                    {req.items?.map((item, idx) => (
+                                      <div key={idx} className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                                        {item.itemName} <span className="text-indigo-500 font-bold">x{item.quantity}</span>
+                                      </div>
+                                    ))}
+                                  </td>
+                                  <td className="px-5 py-4 text-right">
+                                    {req.status === 'Pending' && (
+                                      <div className="space-x-3">
+                                        <button onClick={() => handleRejectRequest(req.id)} className={`${theme.textMuted} hover:text-red-500 font-bold text-sm transition-colors`}>Decline</button>
+                                        <button onClick={() => handleApproveRequest(req.id)} className="bg-indigo-600 text-white hover:bg-indigo-500 px-4 py-2 rounded-lg text-sm font-black shadow-md shadow-indigo-500/30">Approve</button>
+                                      </div>
+                                    )}
+                                    {req.status === 'Approved' && (
+                                      <button onClick={() => handleReturnRequest(req.id)} className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 hover:bg-emerald-500/20 px-4 py-2 rounded-lg text-sm font-black transition-colors">
+                                        Mark as Returned
+                                      </button>
+                                    )}
+                                    {(req.status === 'Returned' || req.status === 'Rejected') && (
+                                      <span className={`px-3 py-1 rounded-full text-xs font-black tracking-wide ${req.status === 'Returned' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                                        {req.status}
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ));
+                            })()}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+
+                    {/* Live Inventory Tracker */}
+                    <section className="space-y-4">
+                      <h3 className={`text-lg font-bold border-b pb-2 ${theme.textMain} ${theme.border}`}>Live Inventory Tracker</h3>
+                      <div className={`${theme.card} border rounded-xl overflow-hidden shadow-sm overflow-x-auto backdrop-blur-md`}>
+                        <table className="w-full text-left text-sm whitespace-nowrap">
+                          <thead>
+                            <tr className={`text-xs uppercase tracking-wider ${isDarkMode ? 'bg-slate-800/80 text-slate-400 border-b border-slate-700/50' : 'bg-slate-100 text-slate-600 border-b border-slate-200'}`}>
+                              <th className="p-4 font-semibold">Item</th>
+                              <th className="p-4 text-center font-semibold">Total Stock</th>
+                              <th className="p-4 text-center font-semibold text-emerald-500">Available</th>
+                              <th className="p-4 text-center font-semibold text-orange-500">Pending</th>
+                              <th className="p-4 text-center font-semibold text-violet-500">Borrowed Out</th>
+                            </tr>
+                          </thead>
+                          <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700/50' : 'divide-slate-100'}`}>
+                            {['Equipment', 'Tools', 'Accessories', 'Services'].map((category) => {
+                              const categoryItems = inventory.filter(i => i.category === category && !i.hidden && !i.isScrewdriverTrigger);
+                              if (categoryItems.length === 0) return null;
+                              return (
+                                <React.Fragment key={category}>
+                                  <tr className={isDarkMode ? 'bg-slate-800/30' : 'bg-slate-50/80'}>
+                                    <td colSpan="5" className={`px-4 py-2 font-bold text-xs uppercase tracking-widest ${theme.textMuted}`}>
+                                      {category}
+                                    </td>
+                                  </tr>
+                                  {categoryItems.map((item) => (
+                                    <tr key={item.id} className={isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}>
+                                      <td className={`p-4 font-medium flex items-center gap-3 ${theme.textMain}`}>
+                                        <span className={`text-xs font-mono px-2 py-0.5 rounded border ${isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-400 border-slate-200'}`}>{item.id}</span>
+                                        {item.name}
+                                      </td>
+                                      <td className={`p-4 text-center ${theme.textMuted}`}>
+                                        {item.category === 'Services' ? '-' : item.total}
+                                      </td>
+                                      <td className="p-4 text-center font-semibold text-emerald-500">
+                                        {item.category === 'Services' ? '-' : item.available}
+                                      </td>
+                                      <td className="p-4 text-center font-medium text-orange-500">
+                                        {item.pending}
+                                      </td>
+                                      <td className="p-4 text-center font-medium text-violet-500">
+                                        {item.borrowed}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </React.Fragment>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+                  </div>
+                )}
               </div>
             )}
-
+            
           </div>
         </main>
       </div>
