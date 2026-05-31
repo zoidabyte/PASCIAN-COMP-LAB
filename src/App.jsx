@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 // --- Firebase Imports ---
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, setDoc } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth'; 
 
 // --- Firebase Configuration ---
@@ -29,7 +29,7 @@ const GRADE_SECTIONS = {
   'Grade 12': ['Biyo', 'Del Mundo', 'Quisumbing', 'Zara']
 };
 
-// Seed data for the first launch
+// Base Catalog Data (Now acts as the single source of truth instead of Firebase)
 const INITIAL_INVENTORY = [
   { id: 'EQ-LP', name: 'Laptop', category: 'Equipment', total: 46 },
   { id: 'EQ-TB', name: 'Tablet', category: 'Equipment', total: 160 },
@@ -65,8 +65,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('Tools');
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
 
-  // --- FIREBASE SYNCED STATES ---
-  const [baseInventory, setBaseInventory] = useState([]);
+  // --- FIREBASE & DATA STATES ---
+  // Inventory is now initialized locally from the constant
+  const [baseInventory, setBaseInventory] = useState(INITIAL_INVENTORY);
   const [requests, setRequests] = useState([]);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
 
@@ -98,36 +99,23 @@ export default function App() {
     }
   }, []);
 
-  // --- FIREBASE SUBSCRIPTIONS ---
+  // --- FIREBASE SUBSCRIPTIONS (Kept Requests & Settings) ---
   useEffect(() => {
-    // 1. Listen to Requests
+    // 1. Listen to Requests (Syncs live borrowing)
     const unsubRequests = onSnapshot(collection(db, "requests"), (snapshot) => {
       const fetchedRequests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       fetchedRequests.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       setRequests(fetchedRequests);
     });
 
-    // 2. Listen to Inventory & Auto-Seed if empty
-    const unsubInventory = onSnapshot(collection(db, "inventory"), (snapshot) => {
-      if (snapshot.empty) {
-        // Seed the database on first load
-        INITIAL_INVENTORY.forEach(async (item) => {
-          await setDoc(doc(db, "inventory", item.id), item);
-        });
-      } else {
-        const fetchedInventory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setBaseInventory(fetchedInventory);
-      }
-    });
-
-    // 3. Listen to Global Settings (Maintenance Mode)
+    // 2. Listen to Global Settings (Maintenance Mode)
     const unsubSettings = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
       if (docSnap.exists()) {
         setIsMaintenanceMode(docSnap.data().isMaintenanceMode || false);
       }
     });
 
-    return () => { unsubRequests(); unsubInventory(); unsubSettings(); };
+    return () => { unsubRequests(); unsubSettings(); };
   }, []);
 
   // --- DYNAMIC INVENTORY CALCULATION ---
@@ -136,18 +124,17 @@ export default function App() {
 
     requests.forEach(req => {
       if (req.status === 'Pending') {
-        req.items?.forEach(reqItem => { // Added optional chaining to prevent crash
+        req.items?.forEach(reqItem => {
           const match = updated.find(i => i.id === reqItem.itemId);
           if (match) {
             match.pending += reqItem.quantity;
-            // Prevent over-borrowing by temporarily reserving pending stock
             if (match.category !== 'Services') {
               match.available = Math.max(0, match.available - reqItem.quantity);
             }
           }
         });
       } else if (req.status === 'Approved') {
-        req.items?.forEach(reqItem => { // Added optional chaining
+        req.items?.forEach(reqItem => {
           const match = updated.find(i => i.id === reqItem.itemId);
           if (match) {
             match.borrowed += reqItem.quantity;
@@ -183,33 +170,25 @@ export default function App() {
     setUiTab('Admin Login'); 
   };
 
-  // -- FIRESTORE INVENTORY MANAGEMENT (ADMIN SETTINGS) --
+  // -- LOCAL INVENTORY MANAGEMENT (ADMIN SETTINGS) --
   const toggleMaintenanceMode = async () => {
     await setDoc(doc(db, "settings", "global"), { isMaintenanceMode: !isMaintenanceMode }, { merge: true });
   };
 
-  const handleUpdateItemTotal = async (id, newTotal) => {
-    try {
-      await updateDoc(doc(db, "inventory", id), { total: Number(newTotal) });
-    } catch (err) { alert("Error updating stock in database."); }
+  const handleUpdateItemTotal = (id, newTotal) => {
+    setBaseInventory(prev => prev.map(item => item.id === id ? { ...item, total: Number(newTotal) } : item));
   };
 
-  const handleAddNewItem = async (e) => {
+  const handleAddNewItem = (e) => {
     e.preventDefault();
     if (baseInventory.some(i => i.id === newItem.id)) return alert("ID already exists!");
-    try {
-      await setDoc(doc(db, "inventory", newItem.id), {
-        ...newItem, total: Number(newItem.total), isLocked: false, hidden: false
-      });
-      setNewItem({ id: '', name: '', category: 'Tools', total: 1 });
-    } catch (err) { alert("Error adding item to database."); }
+    setBaseInventory(prev => [...prev, { ...newItem, total: Number(newItem.total), isLocked: false, hidden: false }]);
+    setNewItem({ id: '', name: '', category: 'Tools', total: 1 });
   };
 
-  const handleDeleteItem = async (id) => {
-    if(window.confirm("Are you sure you want to permanently delete this item?")) {
-      try {
-        await deleteDoc(doc(db, "inventory", id));
-      } catch (err) { alert("Error deleting item from database."); }
+  const handleDeleteItem = (id) => {
+    if(window.confirm("Are you sure you want to permanently delete this item? (Note: Refreshing will restore it)")) {
+      setBaseInventory(prev => prev.filter(item => item.id !== id));
     }
   };
 
@@ -490,9 +469,9 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Database Inventory Manager */}
+                {/* Local Inventory Manager */}
                 <div className="space-y-4 max-w-4xl">
-                  <h3 className={`text-xl font-bold border-b pb-3 font-mono ${theme.border}`}>Database Inventory Manager</h3>
+                  <h3 className={`text-xl font-bold border-b pb-3 font-mono ${theme.border}`}>Session Inventory Manager</h3>
                   
                   {/* Add New Item Form */}
                   <form onSubmit={handleAddNewItem} className={`p-5 rounded-2xl border flex flex-wrap gap-4 items-end ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white/80 border-slate-200'}`}>
@@ -514,7 +493,7 @@ export default function App() {
                       </select>
                     </div>
                     <div className="w-24 space-y-1">
-                      <label className={`text-xs font-bold uppercase tracking-wider ${theme.textMuted}`}>Initial Stock</label>
+                      <label className={`text-xs font-bold uppercase tracking-wider ${theme.textMuted}`}>Stock</label>
                       <input required type="number" min="1" value={newItem.total} onChange={e => setNewItem({...newItem, total: e.target.value})} className={`w-full px-3 py-2 rounded-lg text-sm border outline-none font-mono ${theme.input}`} />
                     </div>
                     <button type="submit" className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-indigo-500 transition-colors">Add Item</button>
@@ -537,7 +516,6 @@ export default function App() {
                             <td className="p-3 text-xs font-mono">{item.id}</td>
                             <td className={`p-3 text-sm font-bold ${theme.textMain}`}>{item.name}</td>
                             <td className="p-3">
-                              {/* BUG FIX: Changed from onChange to onBlur with a key override to stop the text jump glitch */}
                               <input 
                                 key={`stock-${item.id}-${item.total}`}
                                 type="number" 
@@ -672,7 +650,6 @@ export default function App() {
                          </td>
                          <td className="p-4">
                            <ul className="space-y-1">
-                             {/* BUG FIX: Added ?. to prevent crashing if a database document is missing the items array */}
                              {req.items?.map((i, idx) => (
                                <li key={idx} className={`text-sm ${theme.textMain}`}><span className="font-bold text-indigo-500 mr-2">{i.quantity}x</span>{i.itemName}</li>
                              ))}
@@ -727,7 +704,6 @@ export default function App() {
                           </td>
                           <td className="p-4">
                             <ul className="space-y-1">
-                              {/* BUG FIX: Added ?. here as well */}
                               {req.items?.map((i, idx) => (
                                 <li key={idx} className={`text-sm ${theme.textMain}`}><span className="font-bold text-indigo-500 mr-2">{i.quantity}x</span>{i.itemName}</li>
                               ))}
