@@ -94,7 +94,7 @@ export default function App() {
   const [isSDModalOpen, setIsSDModalOpen] = useState(false);
   const [sdCounts, setSdCounts] = useState({ 'TL-SD-PH': 0, 'TL-SD-FL': 0, 'TL-SD-TX': 0, 'TL-SD-HX': 0 });
   const [studentForm, setStudentForm] = useState({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '', borrowDate: '' });
-  const [newItem, setNewItem] = useState({ id: '', name: '', category: 'Tools', total: 1 });
+
 
   // --- AUTH STATES ---
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
@@ -186,6 +186,17 @@ export default function App() {
     setAdminEmail(''); 
     setUiTab('Admin Login'); 
   };
+
+  // -- LOCAL INVENTORY MANAGEMENT (ADMIN SETTINGS) --
+  const toggleMaintenanceMode = async () => {
+    await setDoc(doc(db, "settings", "global"), { isMaintenanceMode: !isMaintenanceMode }, { merge: true });
+  };
+
+  const handleUpdateItemTotal = (id, newTotal) => {
+    setBaseInventory(prev => prev.map(item => item.id === id ? { ...item, total: Number(newTotal) } : item));
+  };
+
+
 
   // -- CART FUNCTIONS --
   const handleAddToCart = (item) => {
@@ -464,71 +475,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Local Inventory Manager */}
-                <div className="space-y-4 max-w-4xl">
-                  <h3 className={`text-xl font-bold border-b pb-3 font-mono ${theme.border}`}>Session Inventory Manager</h3>
-                  
-                  {/* Add New Item Form */}
-                  <form onSubmit={handleAddNewItem} className={`p-5 rounded-2xl border flex flex-wrap gap-4 items-end ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white/80 border-slate-200'}`}>
-                    <div className="flex-1 min-w-[120px] space-y-1">
-                      <label className={`text-xs font-bold uppercase tracking-wider ${theme.textMuted}`}>ID Code</label>
-                      <input required type="text" placeholder="e.g. TL-SENS" value={newItem.id} onChange={e => setNewItem({...newItem, id: e.target.value.toUpperCase()})} className={`w-full px-3 py-2 rounded-lg text-sm border outline-none font-mono ${theme.input}`} />
-                    </div>
-                    <div className="flex-[2] min-w-[200px] space-y-1">
-                      <label className={`text-xs font-bold uppercase tracking-wider ${theme.textMuted}`}>Item Name</label>
-                      <input required type="text" placeholder="e.g. Ultrasonic Sensor" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} className={`w-full px-3 py-2 rounded-lg text-sm border outline-none ${theme.input}`} />
-                    </div>
-                    <div className="flex-1 min-w-[140px] space-y-1">
-                      <label className={`text-xs font-bold uppercase tracking-wider ${theme.textMuted}`}>Category</label>
-                      <select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} className={`w-full px-3 py-2 rounded-lg text-sm border outline-none ${theme.input}`}>
-                        <option value="Equipment">Equipment</option>
-                        <option value="Tools">Tools</option>
-                        <option value="Accessories">Accessories</option>
-                        <option value="Services">Services</option>
-                      </select>
-                    </div>
-                    <div className="w-24 space-y-1">
-                      <label className={`text-xs font-bold uppercase tracking-wider ${theme.textMuted}`}>Stock</label>
-                      <input required type="number" min="1" value={newItem.total} onChange={e => setNewItem({...newItem, total: e.target.value})} className={`w-full px-3 py-2 rounded-lg text-sm border outline-none font-mono ${theme.input}`} />
-                    </div>
-                    <button type="submit" className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-indigo-500 transition-colors">Add Item</button>
-                  </form>
 
-                  {/* Edit Existing Items Table */}
-                  <div className="max-h-[400px] overflow-y-auto rounded-2xl border border-inherit">
-                    <table className="w-full text-left border-collapse">
-                      <thead className={`sticky top-0 ${isDarkMode ? 'bg-slate-900' : 'bg-slate-100'}`}>
-                        <tr>
-                          <th className="p-3 font-bold text-xs uppercase">ID</th>
-                          <th className="p-3 font-bold text-xs uppercase">Name</th>
-                          <th className="p-3 font-bold text-xs uppercase">Total Stock</th>
-                          <th className="p-3 font-bold text-xs uppercase text-right">Delete</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-inherit">
-                        {baseInventory.filter(i => !i.hidden).map(item => (
-                          <tr key={item.id} className="hover:bg-black/5">
-                            <td className="p-3 text-xs font-mono">{item.id}</td>
-                            <td className={`p-3 text-sm font-bold ${theme.textMain}`}>{item.name}</td>
-                            <td className="p-3">
-                              <input 
-                                key={`stock-${item.id}-${item.total}`}
-                                type="number" 
-                                min="0"
-                                defaultValue={item.total} 
-                                onBlur={(e) => handleUpdateItemTotal(item.id, e.target.value)}
-                                className={`w-20 px-2 py-1 rounded text-sm font-mono border outline-none ${theme.input}`}
-                              />
-                            </td>
-                            <td className="p-3 text-right">
-                              <button onClick={() => handleDeleteItem(item.id)} className="text-rose-500 bg-rose-500/10 px-3 py-1.5 rounded-md text-xs font-bold hover:bg-rose-500 hover:text-white transition-colors">Remove</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
                 
                 {/* Visual Settings */}
                 <div className="space-y-4 max-w-2xl">
