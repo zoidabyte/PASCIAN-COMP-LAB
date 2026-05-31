@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 // --- Firebase Imports ---
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth'; 
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -14,9 +15,10 @@ const firebaseConfig = {
   measurementId: "G-DNX5ZLLS21"
 };
 
-// Initialize Firebase & Firestore
+// Initialize Firebase, Firestore, & Auth
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app); 
 
 // --- Static Data Structures ---
 const GRADE_SECTIONS = {
@@ -66,12 +68,9 @@ export default function App() {
   const [uiTab, setUiTab] = useState('Inventory');
   const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // --- ORIGINAL STATES ---
+  // --- APP STATES ---
   const [currentView, setCurrentView] = useState('student');
   const [isLockedToStudent, setIsLockedToStudent] = useState(false);
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
-  const [pinInput, setPinInput] = useState('');
-  const ADMIN_PASSCODE = "0029";
   const [inventory, setInventory] = useState(INITIAL_INVENTORY);
   const [requests, setRequests] = useState([]);
   const [activeTab, setActiveTab] = useState('Tools');
@@ -81,15 +80,23 @@ export default function App() {
   const [sdCounts, setSdCounts] = useState({ 'TL-SD-PH': 0, 'TL-SD-FL': 0, 'TL-SD-TX': 0, 'TL-SD-HX': 0 });
   const [studentForm, setStudentForm] = useState({ name: '', email: '', gradeLevel: '', gradeSection: '', purpose: '', borrowDate: '' });
 
+  // --- AUTH STATES ---
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
+  const [adminEmail, setAdminEmail] = useState(''); 
+  const [adminPassword, setAdminPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+
   // --- EFFECTS ---
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('mode') === 'student') {
       setCurrentView('student');
       setIsLockedToStudent(true); 
+      setUiTab('Inventory');
     } else {
       setCurrentView('admin');
       setIsLockedToStudent(false);
+      setUiTab('Admin Login'); // Default to login screen for admins
     }
   }, []);
 
@@ -125,15 +132,25 @@ export default function App() {
   }, []);
 
   // --- FUNCTIONS ---
-  const handleAdminLogin = (e) => {
+  const handleAdminLogin = async (e) => {
     e.preventDefault();
-    if (pinInput === ADMIN_PASSCODE) {
+    setLoginError('');
+    try {
+      await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
       setIsAdminUnlocked(true);
-      setPinInput('');
-    } else {
-      alert("Incorrect PIN. Access Denied.");
-      setPinInput('');
+      setAdminPassword(''); 
+      setUiTab('Borrowed'); // Auto-route to Borrowed dashboard
+    } catch (error) {
+      setLoginError("Invalid Email or Password. Access Denied.");
+      setAdminPassword('');
     }
+  };
+
+  const handleAdminLogout = async () => {
+    await signOut(auth);
+    setIsAdminUnlocked(false);
+    setAdminEmail(''); 
+    setUiTab('Admin Login'); 
   };
 
   const triggerEmailNotification = async (reqData, newStatus) => {
@@ -236,7 +253,9 @@ export default function App() {
   // --- UPDATED SIDEBAR ROUTING LOGIC ---
   const navItems = isLockedToStudent 
     ? ['Inventory', 'Settings'] 
-    : ['Inventory', 'Borrowed', 'History', 'Settings'];
+    : (isAdminUnlocked 
+        ? ['Inventory', 'Borrowed', 'History', 'Settings'] 
+        : ['Admin Login', 'Settings']);
 
   const handleNavClick = (item) => {
     setUiTab(item);
@@ -273,8 +292,8 @@ export default function App() {
             .tech-grid {
               background-size: 40px 40px;
               background-image: 
-                linear-gradient(to right, ${isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'} 1px, transparent 1px),
-                linear-gradient(to bottom, ${isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'} 1px, transparent 1px);
+                linear-gradient(to right, ${isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.15)'} 1px, transparent 1px),
+                linear-gradient(to bottom, ${isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.15)'} 1px, transparent 1px);
               animation: panGrid 3s linear infinite;
             }
           `}
@@ -347,23 +366,48 @@ export default function App() {
             <header className="flex justify-between items-center">
               <h2 className={`text-3xl font-black tracking-tight flex items-center gap-3 font-mono ${theme.textMain}`}>
                 <span className="opacity-40">&gt;</span> {uiTab}
+                {isAdminUnlocked && currentView === 'admin' && <span className="text-sm font-sans bg-emerald-500/20 text-emerald-500 px-3 py-1 rounded-full ml-2">Unlocked</span>}
               </h2>
+              {isAdminUnlocked && currentView === 'admin' && (
+                <button onClick={handleAdminLogout} className="text-sm font-bold text-red-500 hover:text-red-600 bg-red-500/10 px-4 py-2 rounded-lg transition-colors">
+                  Lock Terminal 🔒
+                </button>
+              )}
             </header>
 
-            {/* ADMIN PIN SCREEN */}
-            {currentView === 'admin' && !isAdminUnlocked && (
+            {/* ADMIN LOGIN SCREEN */}
+            {uiTab === 'Admin Login' && currentView === 'admin' && !isAdminUnlocked && (
               <div className="flex flex-col items-center justify-center h-[60vh] animate-in fade-in zoom-in duration-300">
                 <div className={`${theme.card} p-10 rounded-3xl border backdrop-blur-xl shadow-2xl max-w-sm w-full text-center space-y-6`}>
                   <div className="w-16 h-16 bg-indigo-500/10 text-indigo-500 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-indigo-500/20 shadow-inner">
                     <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                   </div>
                   <div>
-                    <h2 className={`text-2xl font-black ${theme.textMain}`}>Admin Terminal</h2>
-                    <p className={`text-sm mt-2 ${theme.textMuted}`}>Enter access code to proceed.</p>
+                    <h2 className={`text-2xl font-black ${theme.textMain}`}>Admin Gateway</h2>
+                    <p className={`text-sm mt-2 ${theme.textMuted}`}>Database authorization required.</p>
                   </div>
+
+                  {loginError && <p className="text-red-500 text-sm font-bold">{loginError}</p>}
+
                   <form onSubmit={handleAdminLogin} className="space-y-4">
-                    <input type="password" placeholder="••••" value={pinInput} onChange={(e) => setPinInput(e.target.value)} className={`w-full text-center tracking-[1em] text-2xl p-4 rounded-xl font-mono ${theme.input} shadow-inner outline-none transition-all`} autoFocus />
-                    <button type="submit" className="w-full bg-indigo-600 text-white font-black py-4 rounded-xl shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-1 active:scale-95 transition-all duration-300 uppercase tracking-widest text-sm">Authenticate</button>
+                    <input 
+                      type="email" 
+                      placeholder="Admin Email Address" 
+                      value={adminEmail} 
+                      onChange={(e) => setAdminEmail(e.target.value)} 
+                      className={`w-full text-center tracking-wide text-sm p-4 rounded-xl font-mono ${theme.input} shadow-inner outline-none transition-all`} 
+                      required 
+                      autoFocus 
+                    />
+                    <input 
+                      type="password" 
+                      placeholder="••••••••" 
+                      value={adminPassword} 
+                      onChange={(e) => setAdminPassword(e.target.value)} 
+                      className={`w-full text-center tracking-[0.5em] text-2xl p-4 rounded-xl font-mono ${theme.input} shadow-inner outline-none transition-all`} 
+                      required 
+                    />
+                    <button type="submit" className="w-full bg-indigo-600 text-white font-black py-4 rounded-xl shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-1 active:scale-95 transition-all duration-300 uppercase tracking-widest text-sm">Verify Credentials</button>
                   </form>
                 </div>
               </div>
@@ -387,8 +431,8 @@ export default function App() {
               </div>
             )}
 
-            {/* VIEW 2: STUDENT CATALOG (STUDENT VIEW ONLY) */}
-            {uiTab === 'Inventory' && currentView === 'student' && (
+            {/* VIEW 2: STUDENT CATALOG (STUDENT VIEW OR ADMIN VIEW) */}
+            {uiTab === 'Inventory' && (currentView === 'student' || (currentView === 'admin' && isAdminUnlocked)) && (
               <div className="space-y-8 animate-in fade-in duration-300">
                 {showSuccessScreen && (
                   <div className="bg-emerald-500/10 border border-emerald-500/30 backdrop-blur-md rounded-2xl p-5 flex flex-col sm:flex-row gap-4 justify-between items-center text-emerald-600 shadow-md">
@@ -403,18 +447,26 @@ export default function App() {
                   </div>
                 )}
 
+                {/* Show Admin Read-Only Notice if accessed from Admin Panel */}
+                {!isLockedToStudent && isAdminUnlocked && (
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-blue-500 text-sm font-bold flex items-center gap-3">
+                    <span className="text-xl">ℹ️</span> 
+                    Admin Visual Catalog: This inventory view is Read-Only. Borrowing requires the student QR Portal link.
+                  </div>
+                )}
+
                 <div className={`flex p-1.5 rounded-2xl w-full shadow-inner overflow-x-auto gap-1 ${isDarkMode ? 'bg-slate-900/60' : 'bg-slate-200/60'}`}>
                   {['Equipment', 'Tools', 'Accessories', 'Services'].map((tab) => (
                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap flex-1 text-center active:scale-95 ${activeTab === tab ? theme.tabActive : theme.tabInactive}`}>{tab}</button>
                   ))}
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                  <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className={`grid grid-cols-1 ${isLockedToStudent ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-6 items-start`}>
+                  <div className={`${isLockedToStudent ? 'lg:col-span-2 grid-cols-1 sm:grid-cols-2' : 'col-span-full grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'} grid gap-4`}>
                     {filteredInventory.map((item) => {
                       const isAvailable = item.category === 'Services' ? !item.isLocked : item.available > 0;
                       return (
-                        <div key={item.id} onClick={() => !item.isLocked && isAvailable && handleAddToCart(item)} className={`${theme.card} border p-5 rounded-2xl backdrop-blur-md transition-all flex flex-col justify-between min-h-[140px] ${item.isLocked ? 'opacity-40' : isAvailable ? 'cursor-pointer hover:border-indigo-500 active:scale-[0.99]' : 'opacity-50'}`}>
+                        <div key={item.id} onClick={() => !item.isLocked && isAvailable && isLockedToStudent && handleAddToCart(item)} className={`${theme.card} border p-5 rounded-2xl backdrop-blur-md transition-all flex flex-col justify-between min-h-[140px] ${item.isLocked ? 'opacity-40' : isAvailable ? (isLockedToStudent ? 'cursor-pointer hover:border-indigo-500 active:scale-[0.99]' : 'opacity-90') : 'opacity-50'}`}>
                           <div>
                             <div className="flex justify-between items-center mb-2">
                               <span className={`text-xs font-mono px-2 py-1 rounded-md border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}>{item.id}</span>
@@ -439,6 +491,7 @@ export default function App() {
                     })}
                   </div>
 
+                  {isLockedToStudent && (
                   <div className={`${theme.card} border rounded-3xl p-6 backdrop-blur-xl shadow-lg sticky top-6`}>
                     <h3 className={`text-xl font-black mb-4 flex items-center gap-2 ${theme.textMain}`}>
                       <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
@@ -492,75 +545,8 @@ export default function App() {
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
-              </div>
-            )}
-
-            {/* VIEW 3: LIVE INVENTORY TRACKER (ADMIN VIEW ONLY) */}
-            {uiTab === 'Inventory' && currentView === 'admin' && isAdminUnlocked && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <section className="space-y-6">
-                  
-                  {/* Centered Category Tabs */}
-                  <div className="flex justify-center">
-                    <div className={`flex p-1.5 rounded-2xl w-full max-w-2xl shadow-inner overflow-x-auto gap-1 ${isDarkMode ? 'bg-slate-900/60' : 'bg-slate-200/60'}`}>
-                      {['Equipment', 'Tools', 'Accessories', 'Services'].map((tab) => (
-                        <button 
-                          key={tab} 
-                          onClick={() => setActiveTab(tab)} 
-                          className={`px-5 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap flex-1 text-center active:scale-95 ${activeTab === tab ? theme.tabActive : theme.tabInactive}`}
-                        >
-                          {tab}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className={`${theme.card} border rounded-xl overflow-hidden shadow-sm overflow-x-auto backdrop-blur-md`}>
-                    <table className="w-full text-left border-collapse min-w-[800px]">
-                      <thead>
-                        <tr className={isDarkMode ? 'bg-slate-800/80 text-slate-300' : 'bg-slate-100 text-slate-700'}>
-                          <th className="p-4 font-bold text-sm uppercase tracking-wider">Item Details</th>
-                          <th className="p-4 font-bold text-sm uppercase tracking-wider text-center">Total Stock</th>
-                          <th className="p-4 font-bold text-sm uppercase tracking-wider text-center text-emerald-500">Available</th>
-                          <th className="p-4 font-bold text-sm uppercase tracking-wider text-center text-orange-500">Pending</th>
-                          <th className="p-4 font-bold text-sm uppercase tracking-wider text-center text-violet-500">Borrowed</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-inherit">
-                        {inventory
-                          .filter(i => i.category === activeTab && !i.hidden)
-                          .map(item => (
-                            <tr key={item.id} className="transition-colors hover:bg-black/5">
-                              <td className={`p-4 font-medium flex items-center gap-3 ${theme.textMain}`}>
-                                <span className={`text-[10px] font-mono px-2 py-1 rounded border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>{item.id}</span>
-                                {item.name}
-                              </td>
-                              <td className={`p-4 text-center ${theme.textMuted}`}>
-                                {item.category === 'Services' ? '-' : item.total}
-                              </td>
-                              <td className="p-4 text-center font-semibold text-emerald-500">
-                                {item.category === 'Services' ? '-' : item.available}
-                              </td>
-                              <td className="p-4 text-center font-medium text-orange-500">
-                                {item.pending}
-                              </td>
-                              <td className="p-4 text-center font-medium text-violet-500">
-                                {item.borrowed}
-                              </td>
-                            </tr>
-                        ))}
-                        {inventory.filter(i => i.category === activeTab && !i.hidden).length === 0 && (
-                          <tr>
-                            <td colSpan="5" className={`p-8 text-center text-sm font-medium ${theme.textMuted}`}>
-                              No items found in this category.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
               </div>
             )}
 
