@@ -29,7 +29,7 @@ const GRADE_SECTIONS = {
   'Grade 12': ['Biyo', 'Del Mundo', 'Quisumbing', 'Zara']
 };
 
-// Base Catalog Data (Now acts as the single source of truth instead of Firebase)
+// Base Catalog Data
 const INITIAL_INVENTORY = [
   // --- Equipment ---
   { id: 'EQ-LP', name: 'Laptop', category: 'Equipment', total: 46 },
@@ -83,7 +83,6 @@ export default function App() {
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
 
   // --- FIREBASE & DATA STATES ---
-  // Inventory is now initialized locally from the constant
   const [baseInventory, setBaseInventory] = useState(INITIAL_INVENTORY);
   const [requests, setRequests] = useState([]);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
@@ -115,16 +114,14 @@ export default function App() {
     }
   }, []);
 
-  // --- FIREBASE SUBSCRIPTIONS (Kept Requests & Settings) ---
+  // --- FIREBASE SUBSCRIPTIONS ---
   useEffect(() => {
-    // 1. Listen to Requests (Syncs live borrowing)
     const unsubRequests = onSnapshot(collection(db, "requests"), (snapshot) => {
       const fetchedRequests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       fetchedRequests.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       setRequests(fetchedRequests);
     });
 
-    // 2. Listen to Global Settings (Maintenance Mode)
     const unsubSettings = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
       if (docSnap.exists()) {
         setIsMaintenanceMode(docSnap.data().isMaintenanceMode || false);
@@ -186,16 +183,10 @@ export default function App() {
     setUiTab('Admin Login'); 
   };
 
-  // -- LOCAL INVENTORY MANAGEMENT (ADMIN SETTINGS) --
   const toggleMaintenanceMode = async () => {
     await setDoc(doc(db, "settings", "global"), { isMaintenanceMode: !isMaintenanceMode }, { merge: true });
   };
 
-  const handleUpdateItemTotal = (id, newTotal) => {
-    setBaseInventory(prev => prev.map(item => item.id === id ? { ...item, total: Number(newTotal) } : item));
-  };
-
-  // -- CART FUNCTIONS --
   const handleAddToCart = (item) => {
     if (!isLockedToStudent || isMaintenanceMode) return;
     if (item.isScrewdriverTrigger) {
@@ -255,7 +246,6 @@ export default function App() {
     }
   };
 
-  // ADMIN STATUS FUNCTIONS
   const handleApproveRequest = async (reqId) => {
     try { await updateDoc(doc(db, "requests", reqId), { status: 'Approved' }); } 
     catch (err) { alert("Error updating request status."); }
@@ -293,14 +283,20 @@ export default function App() {
     border: isDarkMode ? 'border-slate-700/50' : 'border-slate-200/50',
     tabActive: isDarkMode ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-white text-indigo-600 border border-indigo-200 shadow-sm',
     tabInactive: isDarkMode ? 'text-slate-400 hover:bg-slate-800/50' : 'text-slate-600 hover:bg-white/50',
-    
-    // NEW: Styles specifically for floating category buttons
     categoryActive: isDarkMode 
       ? 'bg-indigo-600 text-white shadow-[0_6px_20px_rgba(79,70,229,0.4)] border border-indigo-500' 
       : 'bg-indigo-600 text-white shadow-[0_6px_20px_rgba(79,70,229,0.4)] border border-indigo-500',
     categoryInactive: isDarkMode 
       ? 'bg-slate-800/90 text-slate-400 border border-slate-700 shadow-lg hover:bg-slate-700 hover:text-white hover:shadow-indigo-500/20' 
       : 'bg-white/90 text-slate-600 border border-slate-200 shadow-lg hover:bg-slate-50 hover:text-indigo-600 hover:shadow-indigo-500/10',
+    
+    // NEW: Styles for the housing/cards of the inventory items
+    inventoryCard: isDarkMode 
+      ? 'bg-slate-800/40 border border-slate-700/50 text-slate-200 shadow-lg shadow-black/20 backdrop-blur-xl' 
+      : 'bg-white/60 border border-white/80 text-slate-800 shadow-xl shadow-slate-200/40 backdrop-blur-xl',
+    inventoryCardHover: isDarkMode
+      ? 'hover:-translate-y-1.5 hover:shadow-[0_10px_40px_rgba(79,70,229,0.25)] hover:border-indigo-500/50 hover:bg-slate-800/70 z-10'
+      : 'hover:-translate-y-1.5 hover:shadow-[0_10px_40px_rgba(79,70,229,0.2)] hover:border-indigo-400 hover:bg-white/90 z-10',
   };
 
   return (
@@ -466,8 +462,6 @@ export default function App() {
             {/* VIEW 1: SETTINGS (ADMIN ONLY) */}
             {uiTab === 'Settings' && isAdminUnlocked && (
               <div className={`${theme.card} flex-1 rounded-3xl border backdrop-blur-xl p-6 md:p-8 transition-colors duration-500 space-y-10 animate-in fade-in`}>
-                
-                {/* Global Access Settings */}
                 <div className="space-y-4 max-w-2xl">
                   <h3 className={`text-xl font-bold border-b pb-3 font-mono ${theme.border}`}>Global Access</h3>
                   <div className={`flex items-center justify-between p-5 rounded-2xl border transition-colors ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white/80 border-slate-200'}`}>
@@ -481,7 +475,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Visual Settings */}
                 <div className="space-y-4 max-w-2xl">
                   <h3 className={`text-xl font-bold border-b pb-3 font-mono ${theme.border}`}>Display</h3>
                   <div className={`flex items-center justify-between p-5 rounded-2xl border transition-colors ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white/80 border-slate-200'}`}>
@@ -494,7 +487,6 @@ export default function App() {
                     </button>
                   </div>
                 </div>
-
               </div>
             )}
 
@@ -539,28 +531,50 @@ export default function App() {
                       ))}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {/* REDESIGNED INVENTORY CARDS */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 px-2 pb-8">
                       {filteredInventory.map((item) => {
                         const isAvailable = item.category === 'Services' ? !item.isLocked : item.available > 0;
                         return (
-                          <div key={item.id} onClick={() => !item.isLocked && isAvailable && isLockedToStudent && handleAddToCart(item)} className={`${theme.card} border p-5 rounded-2xl backdrop-blur-md transition-all flex flex-col justify-between min-h-[140px] ${item.isLocked ? 'opacity-40' : isAvailable ? (isLockedToStudent ? 'cursor-pointer hover:border-indigo-500 active:scale-[0.99]' : 'opacity-90') : 'opacity-50'}`}>
-                            <div>
-                              <div className="flex justify-between items-center mb-2">
-                                <span className={`text-xs font-mono px-2 py-1 rounded-md border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}>{item.id}</span>
+                          <div 
+                            key={item.id} 
+                            onClick={() => !item.isLocked && isAvailable && isLockedToStudent && handleAddToCart(item)} 
+                            className={`
+                              group ${theme.inventoryCard} 
+                              p-6 rounded-3xl transition-all duration-300 ease-out flex flex-col justify-between min-h-[160px] relative overflow-hidden
+                              ${item.isLocked 
+                                ? 'opacity-50 grayscale' 
+                                : isAvailable 
+                                  ? (isLockedToStudent ? `cursor-pointer active:scale-[0.97] ${theme.inventoryCardHover}` : '') 
+                                  : 'opacity-60 grayscale-[50%]'}
+                            `}
+                          >
+                            {/* Inner Glow Orb Effect */}
+                            <div className={`absolute -top-12 -right-12 w-40 h-40 rounded-full blur-3xl opacity-10 pointer-events-none transition-opacity duration-300 ${isDarkMode ? 'bg-indigo-500 group-hover:opacity-30' : 'bg-indigo-400 group-hover:opacity-30'}`}></div>
+
+                            <div className="relative z-10">
+                              <div className="flex justify-between items-start mb-4">
+                                <span className={`text-xs font-mono px-2.5 py-1 rounded-lg border font-bold ${isDarkMode ? 'bg-slate-900/80 border-slate-700/50 text-slate-300' : 'bg-white/80 border-slate-200 text-slate-600'}`}>
+                                  {item.id}
+                                </span>
                                 {item.isLocked ? (
-                                  <span className="text-xs font-bold text-rose-500 bg-rose-500/10 px-2 py-1 rounded-md">Locked</span>
+                                  <span className="text-[10px] uppercase tracking-wider font-black text-rose-500 bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-md">Locked</span>
                                 ) : isAvailable ? (
-                                  <span className="text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md">Available</span>
+                                  <span className="text-[10px] uppercase tracking-wider font-black text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-md">Available</span>
                                 ) : (
-                                  <span className="text-xs font-bold text-orange-500 bg-orange-500/10 px-2 py-1 rounded-md">Out of Stock</span>
+                                  <span className="text-[10px] uppercase tracking-wider font-black text-orange-500 bg-orange-500/10 border border-orange-500/20 px-2 py-1 rounded-md">Out of Stock</span>
                                 )}
                               </div>
-                              <h4 className={`font-bold text-lg leading-tight mt-1 ${theme.textMain}`}>{item.name}</h4>
+                              <h4 className={`font-black text-xl leading-tight tracking-tight mt-2 ${theme.textMain}`}>{item.name}</h4>
                             </div>
+                            
                             {!item.isLocked && item.category !== 'Services' && (
-                               <div className="mt-4 flex items-center justify-between text-sm">
-                                <span className={theme.textMuted}>Stock:</span>
-                                <span className="font-mono font-bold text-indigo-500">{item.available} / {item.total}</span>
+                               <div className={`mt-6 pt-4 border-t flex items-center justify-between text-sm relative z-10 ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
+                                <span className={`font-bold ${theme.textMuted}`}>In Stock</span>
+                                <div className="flex items-baseline gap-1">
+                                  <span className="font-mono font-black text-xl text-indigo-500">{item.available}</span>
+                                  <span className={`font-mono font-bold text-xs ${theme.textMuted}`}>/ {item.total}</span>
+                                </div>
                               </div>
                             )}
                           </div>
